@@ -23,7 +23,7 @@ from Queue import Queue
 from nailgun.api.models import Task
 from nailgun.task.helpers import TaskHelper
 from nailgun.logger import logger
-from nailgun.db import db
+from nailgun.database import db
 
 PLUGIN_PROCESSING_QUEUE = None
 
@@ -72,8 +72,8 @@ class PluginThread(threading.Thread):
                 time.sleep(1)
 
     def set_error(self, task_uuid, msg):
-        db().query(Task).filter_by(uuid=task_uuid).update({
+        db.session.query(Task).filter_by(uuid=task_uuid).update({
             'status': 'error',
             'progress': 100,
             'message': str(msg)})
-        db().commit()
+        db.session.commit()

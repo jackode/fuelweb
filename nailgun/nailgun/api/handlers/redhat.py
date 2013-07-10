@@ -14,12 +14,10 @@
 
 import traceback
 
-import web
-
 from nailgun.api.handlers.base import JSONHandler, content_json
 from nailgun.api.handlers.tasks import TaskHandler
 from nailgun.api.validators.redhat import RedHatAcountValidator
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.task.helpers import TaskHelper
 from nailgun.task.manager import DownloadReleaseTaskManager
 from nailgun.api.models import RedHatAccount
@@ -42,8 +40,8 @@ class RedHatAccountHandler(JSONHandler):
         release_data['redhat'] = data
 
         account = RedHatAccount(**data)
-        db().add(account)
-        db().commit()
+        db.session.add(account)
+        db.session.commit()
 
         task_manager = DownloadReleaseTaskManager(release_data)
         try:
@@ -52,5 +50,5 @@ class RedHatAccountHandler(JSONHandler):
             logger.error(u'DownloadReleaseHandler: error while execution'
                          ' deploy task: {0}'.format(str(exc)))
             logger.error(traceback.format_exc())
-            raise web.badrequest(str(exc))
+            self.abort(400, str(exc))
         return TaskHandler.render(task)

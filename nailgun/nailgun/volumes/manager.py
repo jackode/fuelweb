@@ -16,7 +16,7 @@
 
 import json
 
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.errors import errors
 
@@ -121,7 +121,7 @@ class VolumeManager(object):
         self.volumes = []
         if node:
             logger.debug("VolumeManager initialized with node: %s", node.id)
-            self.db = db()
+            self.db = db.session
             self.node = node
             self.volumes = self.node.attributes.volumes or []
 

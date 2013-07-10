@@ -20,7 +20,7 @@ from nailgun.plugin.fsm import PluginFSM
 from nailgun.errors import errors
 from nailgun.logger import logger
 from nailgun.api.models import Task, Plugin
-from nailgun.db import db
+from nailgun.database import db
 
 
 class PluginManager(object):
@@ -34,25 +34,25 @@ class PluginManager(object):
             version=plugin_data['version'],
             name=plugin_data['name'],
             type=plugin_data['type'])
-        db().add(plugin)
-        db().commit()
+        db.session.add(plugin)
+        db.session.commit()
 
         task = Task(name='install_plugin', cache={'plugin_id': plugin.id})
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
 
         self.queue.put(task.uuid)
         return task
 
     def process(self, task_uuid):
-        task = db().query(Task).filter_by(uuid=task_uuid).first()
+        task = db.session.query(Task).filter_by(uuid=task_uuid).first()
         plugin_id = task.cache['plugin_id']
 
         if task.name == 'install_plugin':
             self.install_plugin(plugin_id)
 
     def install_plugin(self, plugin_id):
-        plugin_db = db().query(Plugin).get(plugin_id)
+        plugin_db = db.session.query(Plugin).get(plugin_id)
         plugin = PluginFSM(plugin_db.id, plugin_db.state)
 
         plugin.install()

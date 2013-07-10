@@ -16,7 +16,7 @@
 
 from fysom import Fysom
 from nailgun.api.models import Plugin
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.fsm.state_list import StateList
 import re
@@ -110,7 +110,7 @@ class PluginFSM(Fysom):
 
     @property
     def plugin(self):
-        return db().query(Plugin).get(self.plugin_id)
+        return db.session.query(Plugin).get(self.plugin_id)
 
     def _onchangestate(self, event):
         logger.debug(
@@ -118,7 +118,7 @@ class PluginFSM(Fysom):
             (self.plugin.name, event.src, event.dst))
 
         self.plugin.state = event.dst
-        db().commit()
+        db.session.commit()
 
     def install(self, event):
         # Downloading

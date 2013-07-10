@@ -27,18 +27,18 @@ from sqlalchemy.orm import object_mapper, ColumnProperty
 from sqlalchemy import or_
 
 import nailgun.rpc as rpc
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.settings import settings
 from nailgun import notifier
 from nailgun.network.manager import NetworkManager
-from nailgun.api.models import Base
 from nailgun.api.models import Network
 from nailgun.api.models import NetworkGroup
 from nailgun.api.models import Node
 from nailgun.api.models import Cluster
 from nailgun.api.models import IPAddr
 from nailgun.api.models import Release
+from nailgun.api.validators.base import BasicValidator
 from nailgun.task.fake import FAKE_THREADS
 from nailgun.errors import errors
 from nailgun.task.helpers import TaskHelper
@@ -128,17 +128,17 @@ class DeploymentTask(object):
             if n.status in ('ready', 'deploying'):
                 n.status = 'provisioned'
             n.progress = 0
-            db().add(n)
-            db().commit()
+            db.session.add(n)
+            db.session.commit()
             nodes_with_attrs.append(cls.__format_node_for_naily(n))
 
         cluster_attrs = task.cluster.attributes.merged_attrs_values()
         cluster_attrs['controller_nodes'] = cls.__controller_nodes(cluster_id)
 
-        nets_db = db().query(Network).join(NetworkGroup).\
+        nets_db = db.session.query(Network).join(NetworkGroup).\
             filter(NetworkGroup.cluster_id == cluster_id).all()
 
-        ng_db = db().query(NetworkGroup).filter_by(
+        ng_db = db.session.query(NetworkGroup).filter_by(
             cluster_id=cluster_id).all()
         for net in ng_db:
             net_name = net.name + '_network_range'
@@ -153,7 +153,7 @@ class DeploymentTask(object):
 
         cluster_attrs['network_manager'] = task.cluster.net_manager
 
-        fixed_net = db().query(NetworkGroup).filter_by(
+        fixed_net = db.session.query(NetworkGroup).filter_by(
             cluster_id=cluster_id).filter_by(name='fixed').first()
         # network_size is required for all managers, otherwise
         #  puppet will use default (255)
@@ -190,8 +190,8 @@ class DeploymentTask(object):
         logger.debug("DeploymentTask.execute(task=%s)" % task.uuid)
         message = cls.message(task)
         task.cache = message
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         rpc.cast('naily', message)
 
     @classmethod
@@ -215,7 +215,7 @@ class DeploymentTask(object):
         """
         netmanager = NetworkManager()
         for node in nodes:
-            node_db = db().query(Node).get(node['id'])
+            node_db = db.session.query(Node).get(node['id'])
 
             fixed_interface = netmanager._get_interface_by_network_name(
                 node_db.id, 'fixed')
@@ -224,7 +224,7 @@ class DeploymentTask(object):
 
     @classmethod
     def __controller_nodes(cls, cluster_id):
-        nodes = db().query(Node).filter_by(
+        nodes = db.session.query(Node).filter_by(
             cluster_id=cluster_id,
             role='controller',
             pending_deletion=False).order_by(Node.id)
@@ -325,8 +325,8 @@ class ProvisionTask(object):
             # FIXME: move this code (updating) into receiver.provision_resp
             if not USE_FAKE:
                 node.status = "provisioning"
-                db().add(node)
-                db().commit()
+                db.session.add(node)
+                db.session.commit()
 
             # here we assign admin network IPs for node
             # one IP for every node interface
@@ -335,7 +335,7 @@ class ProvisionTask(object):
                 len(node.meta.get('interfaces', []))
             )
             admin_net_id = netmanager.get_admin_network_id()
-            admin_ips = set([i.ip_addr for i in db().query(IPAddr).
+            admin_ips = set([i.ip_addr for i in db.session.query(IPAddr).
                             filter_by(node=node.id).
                             filter_by(network=admin_net_id)])
             for i in node.meta.get('interfaces', []):
@@ -395,8 +395,8 @@ class ProvisionTask(object):
         logger.debug("ProvisionTask.execute(task=%s)" % task.uuid)
         message = cls.message(task)
         task.cache = message
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         rpc.cast('naily', message)
 
 
@@ -455,7 +455,7 @@ class DeletionTask(object):
         nodes_to_delete_constant = list(nodes_to_delete)
 
         for node in nodes_to_delete_constant:
-            node_db = db().query(Node).get(node['id'])
+            node_db = db.session.query(Node).get(node['id'])
 
             slave_name = TaskHelper.make_slave_name(
                 node['id'], node['role']
@@ -465,8 +465,8 @@ class DeletionTask(object):
             if not node_db.online:
                 logger.info(
                     "Node is offline, can't MBR clean: %s", slave_name)
-                db().delete(node_db)
-                db().commit()
+                db.session.delete(node_db)
+                db.session.commit()
 
                 nodes_to_delete.remove(node)
 
@@ -481,7 +481,7 @@ class DeletionTask(object):
                              slave_name)
                 engine_nodes.append(slave_name)
                 try:
-                    node_db = db().query(Node).get(node['id'])
+                    node_db = db.session.query(Node).get(node['id'])
                     if node_db and node_db.fqdn:
                         node_hostname = node_db.fqdn
                     else:
@@ -580,8 +580,8 @@ class VerifyNetworksTask(object):
         logger.debug("Network verification is called with: %s", message)
 
         task.cache = message
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         rpc.cast('naily', message)
 
 
@@ -606,7 +606,7 @@ class CheckNetworksTask(object):
         for ng in networks:
             net_errors = []
             sub_ranges = []
-            ng_db = db().query(NetworkGroup).get(ng['id'])
+            ng_db = db.session.query(NetworkGroup).get(ng['id'])
             if not ng_db:
                 net_errors.append("id")
                 err_msgs.append("Invalid network ID: {0}".format(ng['id']))
@@ -662,8 +662,8 @@ class CheckNetworksTask(object):
                 })
         if err_msgs:
             task.result = result
-            db().add(task)
-            db().commit()
+            db.session.add(task)
+            db.session.commit()
             full_err_msg = "\n".join(err_msgs)
             raise errors.NetworkCheckError(full_err_msg)
 

@@ -18,7 +18,7 @@
 import web
 import traceback
 
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.api.handlers.base import JSONHandler, content_json
 from nailgun.api.models import Cluster, Network, NetworkGroup, IPAddr
@@ -37,7 +37,7 @@ class OSTFHandler(JSONHandler):
     @content_json
     def GET(self, cluster_id):
         try:
-            cluster = db().query(Cluster).get(cluster_id)
+            cluster = db.session.query(Cluster).get(cluster_id)
             cluster_attrs = self.get_cluster_attrs(cluster)
             network_manager = NetworkManager()
             horizon_url = network_manager.get_horizon_url(cluster_id)
@@ -76,7 +76,7 @@ class OSTFHandler(JSONHandler):
         admin_net_id = network_manager.get_admin_network_id()
         ip_addrs = []
         for node in self.controllers(cluster):
-            ip_addr = db().query(IPAddr).filter_by(
+            ip_addr = db.session.query(IPAddr).filter_by(
                 node=node.id, network=admin_net_id).first().ip_addr
             ip_addrs.append(ip_addr)
 

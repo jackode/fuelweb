@@ -23,9 +23,6 @@ import tarfile
 import tempfile
 from itertools import dropwhile
 
-import web
-
-from nailgun.db import db
 from nailgun.settings import settings
 from nailgun.api.models import Node
 from nailgun.api.handlers.base import JSONHandler, content_json
@@ -108,7 +105,7 @@ class LogEntryCollectionHandler(JSONHandler):
         if log_config['remote'] and not log_config.get('fake'):
             if not user_data.get('node'):
                 raise web.badrequest("'node' must be specified")
-            node = db().query(Node).get(user_data.node)
+            node = Node.query.get(user_data.node)
             if not node:
                 return web.notfound("Node not found")
             if not node.ip:

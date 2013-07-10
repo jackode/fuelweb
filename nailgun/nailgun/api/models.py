@@ -25,100 +25,99 @@ from copy import deepcopy
 
 import web
 from netaddr import IPNetwork
-from sqlalchemy import Column, UniqueConstraint, Table
-from sqlalchemy import Integer, String, Unicode, Text, Boolean, Float
-from sqlalchemy import ForeignKey, Enum, DateTime
-from sqlalchemy import create_engine
-from sqlalchemy.orm import relationship, backref
-from sqlalchemy.ext.declarative import declarative_base
 
 from nailgun.logger import logger
-from nailgun.db import db
 from nailgun.volumes.manager import VolumeManager
 from nailgun.api.fields import JSON
+from nailgun.database import db
 from nailgun.settings import settings
 
-Base = declarative_base()
 
-
-class Release(Base):
+class Release(db.Model):
     __tablename__ = 'releases'
     __table_args__ = (
-        UniqueConstraint('name', 'version'),
+        db.UniqueConstraint('name', 'version'),
     )
     STATES = (
         'not_available',
         'downloading',
         'available'
     )
-    id = Column(Integer, primary_key=True)
-    name = Column(Unicode(100), nullable=False)
-    version = Column(String(30), nullable=False)
-    description = Column(Unicode)
-    operating_system = Column(String(50), nullable=False)
-    state = Column(Enum(*STATES, name='release_state'),
-                   nullable=False,
-                   default='not_available')
-    networks_metadata = Column(JSON, default=[])
-    attributes_metadata = Column(JSON, default={})
-    volumes_metadata = Column(JSON, default={})
-    clusters = relationship("Cluster", backref="release")
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.Unicode(100), nullable=False)
+    version = db.Column(db.String(30), nullable=False)
+    description = db.Column(db.Unicode)
+    operating_system = db.Column(db.String(50), nullable=False)
+    state = db.Column(db.Enum(*STATES, name='release_state'),
+                      nullable=False,
+                      default='not_available')
+    networks_metadata = db.Column(JSON, default=[])
+    attributes_metadata = db.Column(JSON, default={})
+    volumes_metadata = db.Column(JSON, default={})
+    clusters = db.relationship("Cluster", backref="release")
 
 
-class ClusterChanges(Base):
+class ClusterChanges(db.Model):
     __tablename__ = 'cluster_changes'
     POSSIBLE_CHANGES = (
         'networks',
         'attributes',
         'disks'
     )
-    id = Column(Integer, primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('clusters.id'))
-    node_id = Column(Integer, ForeignKey('nodes.id', ondelete='CASCADE'))
-    name = Column(
-        Enum(*POSSIBLE_CHANGES, name='possible_changes'),
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'))
+    node_id = db.Column(
+        db.Integer,
+        db.ForeignKey('nodes.id', ondelete='CASCADE')
+    )
+    name = db.Column(
+        db.Enum(*POSSIBLE_CHANGES, name='possible_changes'),
         nullable=False
     )
 
 
-class Cluster(Base):
+class Cluster(db.Model):
     __tablename__ = 'clusters'
     MODES = ('singlenode', 'multinode', 'ha')
     STATUSES = ('new', 'deployment', 'operational', 'error', 'remove')
     NET_MANAGERS = ('FlatDHCPManager', 'VlanManager')
-    id = Column(Integer, primary_key=True)
-    mode = Column(
-        Enum(*MODES, name='cluster_mode'),
+    id = db.Column(db.Integer, primary_key=True)
+    mode = db.Column(
+        db.Enum(*MODES, name='cluster_mode'),
         nullable=False,
         default='multinode'
     )
-    status = Column(
-        Enum(*STATUSES, name='cluster_status'),
+    status = db.Column(
+        db.Enum(*STATUSES, name='cluster_status'),
         nullable=False,
         default='new'
     )
-    net_manager = Column(
-        Enum(*NET_MANAGERS, name='cluster_net_manager'),
+    net_manager = db.Column(
+        db.Enum(*NET_MANAGERS, name='cluster_net_manager'),
         nullable=False,
         default='FlatDHCPManager'
     )
-    name = Column(Unicode(50), unique=True, nullable=False)
-    release_id = Column(Integer, ForeignKey('releases.id'), nullable=False)
-    nodes = relationship("Node", backref="cluster", cascade="delete")
-    tasks = relationship("Task", backref="cluster", cascade="delete")
-    attributes = relationship("Attributes", uselist=False,
-                              backref="cluster", cascade="delete")
-    changes = relationship("ClusterChanges", backref="cluster",
-                           cascade="delete")
+    name = db.Column(db.Unicode(50), unique=True, nullable=False)
+    release_id = db.Column(
+        db.Integer,
+        db.ForeignKey('releases.id'),
+        nullable=False
+    )
+    nodes = db.relationship("Node", backref="cluster", cascade="delete")
+    tasks = db.relationship("Task", backref="cluster", cascade="delete")
+    attributes = db.relationship("Attributes", uselist=False,
+                                 backref="cluster", cascade="delete")
+    changes = db.relationship("ClusterChanges", backref="cluster",
+                              cascade="delete")
     # We must keep all notifications even if cluster is removed.
     # It is because we want user to be able to see
     # the notification history so that is why we don't use
     # cascade="delete" in this relationship
     # During cluster deletion sqlalchemy engine will set null
     # into cluster foreign key column of notification entity
-    notifications = relationship("Notification", backref="cluster")
-    network_groups = relationship("NetworkGroup", backref="cluster",
-                                  cascade="delete")
+    notifications = db.relationship("Notification", backref="cluster")
+    network_groups = db.relationship("NetworkGroup", backref="cluster",
+                                     cascade="delete")
 
     @property
     def full_name(self):
@@ -128,20 +127,22 @@ class Cluster(Base):
     def validate(cls, data):
         d = cls.validate_json(data)
         if d.get("name"):
-            if db().query(Cluster).filter_by(
+            if Cluster.query.filter_by(
                 name=d["name"]
             ).first():
-                c = web.webapi.conflict
-                c.message = "Environment with this name already exists"
-                raise c()
+                pass
+                # c = web.webapi.conflict
+                # c.message = "Environment with this name already exists"
+                # raise c()
         if d.get("release"):
-            release = db().query(Release).get(d.get("release"))
+            release = Release.query.get(d.get("release"))
             if not release:
-                raise web.webapi.badrequest(message="Invalid release id")
+                pass
+                # raise web.webapi.badrequest(message="Invalid release id")
         return d
 
     def add_pending_changes(self, changes_type, node_id=None):
-        ex_chs = db().query(ClusterChanges).filter_by(
+        ex_chs = ClusterChanges.query.filter_by(
             cluster=self,
             name=changes_type
         )
@@ -158,20 +159,20 @@ class Cluster(Base):
         )
         if node_id:
             ch.node_id = node_id
-        db().add(ch)
-        db().commit()
+        db.session.add(ch)
+        db.session.commit()
 
     def clear_pending_changes(self, node_id=None):
-        chs = db().query(ClusterChanges).filter_by(
+        chs = db.session.query(ClusterChanges).filter_by(
             cluster_id=self.id
         )
         if node_id:
             chs = chs.filter_by(node_id=node_id)
-        map(db().delete, chs.all())
-        db().commit()
+        map(db.session.delete, chs.all())
+        db.session.commit()
 
 
-class Node(Base):
+class Node(db.Model):
     __tablename__ = 'nodes'
     NODE_STATUSES = (
         'ready',
@@ -191,35 +192,35 @@ class Node(Base):
         'provision',
         'deletion'
     )
-    id = Column(Integer, primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('clusters.id'))
-    name = Column(Unicode(100))
-    status = Column(
-        Enum(*NODE_STATUSES, name='node_status'),
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'))
+    name = db.Column(db.Unicode(100))
+    status = db.Column(
+        db.Enum(*NODE_STATUSES, name='node_status'),
         nullable=False,
         default='discover'
     )
-    meta = Column(JSON, default={})
-    mac = Column(String(17), nullable=False, unique=True)
-    ip = Column(String(15))
-    fqdn = Column(String(255))
-    manufacturer = Column(Unicode(50))
-    platform_name = Column(String(150))
-    progress = Column(Integer, default=0)
-    os_platform = Column(String(150))
-    role = Column(Enum(*NODE_ROLES, name='node_role'))
-    pending_addition = Column(Boolean, default=False)
-    pending_deletion = Column(Boolean, default=False)
-    changes = relationship("ClusterChanges", backref="node")
-    error_type = Column(Enum(*NODE_ERRORS, name='node_error_type'))
-    error_msg = Column(String(255))
-    timestamp = Column(DateTime, nullable=False)
-    online = Column(Boolean, default=True)
-    attributes = relationship("NodeAttributes",
-                              backref=backref("node"),
-                              uselist=False)
-    interfaces = relationship("NodeNICInterface", backref="node",
-                              cascade="delete")
+    meta = db.Column(JSON, default={})
+    mac = db.Column(db.String(17), nullable=False, unique=True)
+    ip = db.Column(db.String(15))
+    fqdn = db.Column(db.String(255))
+    manufacturer = db.Column(db.Unicode(50))
+    platform_name = db.Column(db.String(150))
+    progress = db.Column(db.Integer, default=0)
+    os_platform = db.Column(db.String(150))
+    role = db.Column(db.Enum(*NODE_ROLES, name='node_role'))
+    pending_addition = db.Column(db.Boolean, default=False)
+    pending_deletion = db.Column(db.Boolean, default=False)
+    changes = db.relationship("ClusterChanges", backref="node")
+    error_type = db.Column(db.Enum(*NODE_ERRORS, name='node_error_type'))
+    error_msg = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, nullable=False)
+    online = db.Column(db.Boolean, default=True)
+    attributes = db.relationship("NodeAttributes",
+                                 backref=db.backref("node"),
+                                 uselist=False)
+    interfaces = db.relationship("NodeNICInterface", backref="node",
+                                 cascade="delete")
 
     @property
     def network_data(self):
@@ -306,55 +307,64 @@ class Node(Base):
         self.meta = data
 
 
-class NodeAttributes(Base):
+class NodeAttributes(db.Model):
     __tablename__ = 'node_attributes'
-    id = Column(Integer, primary_key=True)
-    node_id = Column(Integer, ForeignKey('nodes.id'))
-    volumes = Column(JSON, default=[])
-    interfaces = Column(JSON, default={})
+    id = db.Column(db.Integer, primary_key=True)
+    node_id = db.Column(db.Integer, db.ForeignKey('nodes.id'))
+    volumes = db.Column(JSON, default=[])
+    interfaces = db.Column(JSON, default={})
 
 
-class IPAddr(Base):
+class IPAddr(db.Model):
     __tablename__ = 'ip_addrs'
-    id = Column(Integer, primary_key=True)
-    network = Column(Integer, ForeignKey('networks.id', ondelete="CASCADE"))
-    node = Column(Integer, ForeignKey('nodes.id', ondelete="CASCADE"))
-    ip_addr = Column(String(25), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    network = db.Column(
+        db.Integer,
+        db.ForeignKey('networks.id', ondelete="CASCADE")
+    )
+    node = db.Column(db.Integer, db.ForeignKey('nodes.id', ondelete="CASCADE"))
+    ip_addr = db.Column(db.String(25), nullable=False)
 
 
-class IPAddrRange(Base):
+class IPAddrRange(db.Model):
     __tablename__ = 'ip_addr_ranges'
-    id = Column(Integer, primary_key=True)
-    network_group_id = Column(Integer, ForeignKey('network_groups.id'))
-    first = Column(String(25), nullable=False)
-    last = Column(String(25), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    network_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey('network_groups.id')
+    )
+    first = db.Column(db.String(25), nullable=False)
+    last = db.Column(db.String(25), nullable=False)
 
 
-class Vlan(Base):
+class Vlan(db.Model):
     __tablename__ = 'vlan'
-    id = Column(Integer, primary_key=True)
-    network = relationship("Network",
-                           backref=backref("vlan"))
+    id = db.Column(db.Integer, primary_key=True)
+    network = db.relationship("Network",
+                              backref=db.backref("vlan"))
 
 
-class Network(Base):
+class Network(db.Model):
     __tablename__ = 'networks'
-    id = Column(Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     # can be nullable only for fuelweb admin net
-    release = Column(Integer, ForeignKey('releases.id'))
-    name = Column(Unicode(100), nullable=False)
-    access = Column(String(20), nullable=False)
-    vlan_id = Column(Integer, ForeignKey('vlan.id'))
-    network_group_id = Column(Integer, ForeignKey('network_groups.id'))
-    cidr = Column(String(25), nullable=False)
-    gateway = Column(String(25))
-    nodes = relationship(
+    release = db.Column(db.Integer, db.ForeignKey('releases.id'))
+    name = db.Column(db.Unicode(100), nullable=False)
+    access = db.Column(db.String(20), nullable=False)
+    vlan_id = db.Column(db.Integer, db.ForeignKey('vlan.id'))
+    network_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey('network_groups.id')
+    )
+    cidr = db.Column(db.String(25), nullable=False)
+    gateway = db.Column(db.String(25))
+    nodes = db.relationship(
         "Node",
         secondary=IPAddr.__table__,
         backref="networks")
 
 
-class NetworkGroup(Base):
+class NetworkGroup(db.Model):
     __tablename__ = 'network_groups'
     NAMES = (
         # Node networks
@@ -370,23 +380,26 @@ class NetworkGroup(Base):
         'fixed'
     )
 
-    id = Column(Integer, primary_key=True)
-    name = Column(Enum(*NAMES, name='network_group_name'), nullable=False)
-    access = Column(String(20), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(
+        db.Enum(*NAMES, name='network_group_name'),
+        nullable=False
+    )
+    access = db.Column(db.String(20), nullable=False)
     # can be nullable only for fuelweb admin net
-    release = Column(Integer, ForeignKey('releases.id'))
+    release = db.Column(db.Integer, db.ForeignKey('releases.id'))
     # can be nullable only for fuelweb admin net
-    cluster_id = Column(Integer, ForeignKey('clusters.id'))
-    network_size = Column(Integer, default=256)
-    amount = Column(Integer, default=1)
-    vlan_start = Column(Integer, default=1)
-    networks = relationship("Network", cascade="delete",
-                            backref="network_group")
-    cidr = Column(String(25))
-    gateway = Column(String(25))
+    cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'))
+    network_size = db.Column(db.Integer, default=256)
+    amount = db.Column(db.Integer, default=1)
+    vlan_start = db.Column(db.Integer, default=1)
+    networks = db.relationship("Network", cascade="delete",
+                               backref="network_group")
+    cidr = db.Column(db.String(25))
+    gateway = db.Column(db.String(25))
 
-    netmask = Column(String(25), nullable=False)
-    ip_ranges = relationship(
+    netmask = db.Column(db.String(25), nullable=False)
+    ip_ranges = db.relationship(
         "IPAddrRange",
         backref="network_group"
     )
@@ -417,7 +430,7 @@ class NetworkConfiguration(object):
 
         if 'networks' in network_configuration:
             for ng in network_configuration['networks']:
-                ng_db = db().query(NetworkGroup).get(ng['id'])
+                ng_db = NetworkGroup.query.get(ng['id'])
 
                 for key, value in ng.iteritems():
                     if key == "ip_ranges":
@@ -436,7 +449,7 @@ class NetworkConfiguration(object):
     @classmethod
     def __set_ip_ranges(cls, network_group_id, ip_ranges):
         # deleting old ip ranges
-        db().query(IPAddrRange).filter_by(
+        IPAddrRange.query.filter_by(
             network_group_id=network_group_id).delete()
 
         for r in ip_ranges:
@@ -444,8 +457,8 @@ class NetworkConfiguration(object):
                 first=r[0],
                 last=r[1],
                 network_group_id=network_group_id)
-            db().add(new_ip_range)
-        db().commit()
+            db.session.add(new_ip_range)
+        db.session.commit()
 
 
 class AttributesGenerators(object):
@@ -469,17 +482,17 @@ class AttributesGenerators(object):
         return str(arg)
 
 
-class Attributes(Base):
+class Attributes(db.Model):
     __tablename__ = 'attributes'
-    id = Column(Integer, primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('clusters.id'))
-    editable = Column(JSON)
-    generated = Column(JSON)
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'))
+    editable = db.Column(JSON)
+    generated = db.Column(JSON)
 
     def generate_fields(self):
         self.generated = self.traverse(self.generated)
-        db().add(self)
-        db().commit()
+        db.session.add(self)
+        db.session.commit()
 
     @classmethod
     def traverse(cls, cdict):
@@ -529,7 +542,7 @@ class Attributes(Base):
         return result
 
 
-class Task(Base):
+class Task(db.Model):
     __tablename__ = 'tasks'
     TASK_STATUSES = (
         'ready',
@@ -559,37 +572,37 @@ class Task(Base):
         # releases
         'download_release'
     )
-    id = Column(Integer, primary_key=True)
-    cluster_id = Column(Integer, ForeignKey('clusters.id'))
-    uuid = Column(String(36), nullable=False,
-                  default=lambda: str(uuid.uuid4()))
-    name = Column(
-        Enum(*TASK_NAMES, name='task_name'),
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(db.Integer, db.ForeignKey('clusters.id'))
+    uuid = db.Column(db.String(36), nullable=False,
+                     default=lambda: str(uuid.uuid4()))
+    name = db.Column(
+        db.Enum(*TASK_NAMES, name='task_name'),
         nullable=False,
         default='super'
     )
-    message = Column(Text)
-    status = Column(
-        Enum(*TASK_STATUSES, name='task_status'),
+    message = db.Column(db.Text)
+    status = db.Column(
+        db.Enum(*TASK_STATUSES, name='task_status'),
         nullable=False,
         default='running'
     )
-    progress = Column(Integer, default=0)
-    cache = Column(JSON, default={})
-    result = Column(JSON, default={})
-    parent_id = Column(Integer, ForeignKey('tasks.id'))
-    subtasks = relationship(
+    progress = db.Column(db.Integer, default=0)
+    cache = db.Column(JSON, default={})
+    result = db.Column(JSON, default={})
+    parent_id = db.Column(db.Integer, db.ForeignKey('tasks.id'))
+    subtasks = db.relationship(
         "Task",
-        backref=backref('parent', remote_side=[id])
+        backref=db.backref('parent', remote_side=[id])
     )
-    notifications = relationship(
+    notifications = db.relationship(
         "Notification",
-        backref=backref('task', remote_side=[id])
+        backref=db.backref('task', remote_side=[id])
     )
     # Task weight is used to calculate supertask progress
     # sum([t.progress * t.weight for t in supertask.subtasks]) /
     # sum([t.weight for t in supertask.subtasks])
-    weight = Column(Float, default=1.0)
+    weight = db.Column(db.Float, default=1.0)
 
     def __repr__(self):
         return "<Task '{0}' {1} ({2}) {3}>".format(
@@ -606,11 +619,11 @@ class Task(Base):
         task = Task(name=name, cluster=self.cluster)
 
         self.subtasks.append(task)
-        db().commit()
+        db.session.commit()
         return task
 
 
-class Notification(Base):
+class Notification(db.Model):
     __tablename__ = 'notifications'
 
     NOTIFICATION_STATUSES = (
@@ -624,124 +637,130 @@ class Notification(Base):
         'error',
     )
 
-    id = Column(Integer, primary_key=True)
-    cluster_id = Column(
-        Integer,
-        ForeignKey('clusters.id', ondelete='SET NULL')
+    id = db.Column(db.Integer, primary_key=True)
+    cluster_id = db.Column(
+        db.Integer,
+        db.ForeignKey('clusters.id', ondelete='SET NULL')
     )
-    node_id = Column(Integer, ForeignKey('nodes.id', ondelete='SET NULL'))
-    task_id = Column(Integer, ForeignKey('tasks.id', ondelete='SET NULL'))
-    topic = Column(
-        Enum(*NOTIFICATION_TOPICS, name='notif_topic'),
+    node_id = db.Column(
+        db.Integer,
+        db.ForeignKey('nodes.id', ondelete='SET NULL')
+    )
+    task_id = db.Column(
+        db.Integer,
+        db.ForeignKey('tasks.id', ondelete='SET NULL')
+    )
+    topic = db.Column(
+        db.Enum(*NOTIFICATION_TOPICS, name='notif_topic'),
         nullable=False
     )
-    message = Column(Text)
-    status = Column(
-        Enum(*NOTIFICATION_STATUSES, name='notif_status'),
+    message = db.Column(db.Text)
+    status = db.Column(
+        db.Enum(*NOTIFICATION_STATUSES, name='notif_status'),
         nullable=False,
         default='unread'
     )
-    datetime = Column(DateTime, nullable=False)
+    datetime = db.Column(db.DateTime, nullable=False)
 
 
-class L2Topology(Base):
+class L2Topology(db.Model):
     __tablename__ = 'l2_topologies'
-    id = Column(Integer, primary_key=True)
-    network_id = Column(
-        Integer,
-        ForeignKey('network_groups.id', ondelete="CASCADE"),
+    id = db.Column(db.Integer, primary_key=True)
+    network_id = db.Column(
+        db.Integer,
+        db.ForeignKey('network_groups.id', ondelete="CASCADE"),
         nullable=False
     )
 
 
-class L2Connection(Base):
+class L2Connection(db.Model):
     __tablename__ = 'l2_connections'
-    id = Column(Integer, primary_key=True)
-    topology_id = Column(
-        Integer,
-        ForeignKey('l2_topologies.id', ondelete="CASCADE"),
+    id = db.Column(db.Integer, primary_key=True)
+    topology_id = db.Column(
+        db.Integer,
+        db.ForeignKey('l2_topologies.id', ondelete="CASCADE"),
         nullable=False
     )
-    interface_id = Column(
-        Integer,
+    interface_id = db.Column(
+        db.Integer,
         # If interface is removed we should somehow remove
         # all L2Topologes which include this interface.
-        ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
+        db.ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
         nullable=False
     )
 
 
-class AllowedNetworks(Base):
+class AllowedNetworks(db.Model):
     __tablename__ = 'allowed_networks'
-    id = Column(Integer, primary_key=True)
-    network_id = Column(
-        Integer,
-        ForeignKey('network_groups.id', ondelete="CASCADE"),
+    id = db.Column(db.Integer, primary_key=True)
+    network_id = db.Column(
+        db.Integer,
+        db.ForeignKey('network_groups.id', ondelete="CASCADE"),
         nullable=False
     )
-    interface_id = Column(
-        Integer,
-        ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
+    interface_id = db.Column(
+        db.Integer,
+        db.ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
         nullable=False
     )
 
 
-class NetworkAssignment(Base):
+class NetworkAssignment(db.Model):
     __tablename__ = 'net_assignments'
-    id = Column(Integer, primary_key=True)
-    network_id = Column(
-        Integer,
-        ForeignKey('network_groups.id', ondelete="CASCADE"),
+    id = db.Column(db.Integer, primary_key=True)
+    network_id = db.Column(
+        db.Integer,
+        db.ForeignKey('network_groups.id', ondelete="CASCADE"),
         nullable=False
     )
-    interface_id = Column(
-        Integer,
-        ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
+    interface_id = db.Column(
+        db.Integer,
+        db.ForeignKey('node_nic_interfaces.id', ondelete="CASCADE"),
         nullable=False
     )
 
 
-class NodeNICInterface(Base):
+class NodeNICInterface(db.Model):
     __tablename__ = 'node_nic_interfaces'
-    id = Column(Integer, primary_key=True)
-    node_id = Column(
-        Integer,
-        ForeignKey('nodes.id', ondelete="CASCADE"),
+    id = db.Column(db.Integer, primary_key=True)
+    node_id = db.Column(
+        db.Integer,
+        db.ForeignKey('nodes.id', ondelete="CASCADE"),
         nullable=False
     )
-    name = Column(String(128), nullable=False)
-    mac = Column(String(32), nullable=False)
-    max_speed = Column(Integer)
-    current_speed = Column(Integer)
-    allowed_networks = relationship(
+    name = db.Column(db.String(128), nullable=False)
+    mac = db.Column(db.String(32), nullable=False)
+    max_speed = db.Column(db.Integer)
+    current_speed = db.Column(db.Integer)
+    allowed_networks = db.relationship(
         "NetworkGroup",
         secondary=AllowedNetworks.__table__,
     )
-    assigned_networks = relationship(
+    assigned_networks = db.relationship(
         "NetworkGroup",
         secondary=NetworkAssignment.__table__,
     )
 
 
-class Plugin(Base):
+class Plugin(db.Model):
     __tablename__ = 'plugins'
     TYPES = ('nailgun', 'fuel')
 
-    id = Column(Integer, primary_key=True)
-    type = Column(Enum(*TYPES, name='plugin_type'), nullable=False)
-    name = Column(String(128), nullable=False, unique=True)
-    state = Column(String(128), nullable=False, default='registered')
-    version = Column(String(128), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.Enum(*TYPES, name='plugin_type'), nullable=False)
+    name = db.Column(db.String(128), nullable=False, unique=True)
+    state = db.Column(db.String(128), nullable=False, default='registered')
+    version = db.Column(db.String(128), nullable=False)
 
 
-class RedHatAccount(Base):
+class RedHatAccount(db.Model):
     __tablename__ = 'red_hat_accounts'
     LICENSE_TYPES = ('rhsm', 'rhn')
 
-    id = Column(Integer, primary_key=True)
-    username = Column(String(100), nullable=False)
-    password = Column(String(100), nullable=False)
-    license_type = Column(Enum(*LICENSE_TYPES, name='license_type'),
-                          nullable=False)
-    satellite = Column(String(250))
-    activation_key = Column(String(300))
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+    license_type = db.Column(db.Enum(*LICENSE_TYPES, name='license_type'),
+                             nullable=False)
+    satellite = db.Column(db.String(250))
+    activation_key = db.Column(db.String(300))

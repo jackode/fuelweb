@@ -17,15 +17,15 @@
 import json
 import logging
 
-import web
+from flask import request
 
-from nailgun.db import db
 from nailgun.api.models import Notification
 from nailgun.api.validators.notification import NotificationValidator
 from nailgun.api.handlers.base import JSONHandler, content_json
+from nailgun.api.handlers.base import SingleHandler, CollectionHandler
 
 
-class NotificationHandler(JSONHandler):
+class NotificationHandler(SingleHandler):
     fields = (
         "id",
         "cluster",
@@ -54,55 +54,45 @@ class NotificationHandler(JSONHandler):
         return json_data
 
     @content_json
-    def GET(self, notification_id):
+    def put(self, notification_id):
         notification = self.get_object_or_404(Notification, notification_id)
-        return self.render(notification)
-
-    @content_json
-    def PUT(self, notification_id):
-        notification = self.get_object_or_404(Notification, notification_id)
-        data = self.validator.validate_update(web.data())
+        data = self.validator.validate_update(request.data)
         for key, value in data.iteritems():
             setattr(notification, key, value)
-        db().add(notification)
-        db().commit()
+        db.session.add(notification)
+        db.session.commit()
         return self.render(notification)
 
 
-class NotificationCollectionHandler(JSONHandler):
+class NotificationCollectionHandler(CollectionHandler):
 
     validator = NotificationValidator
+    single = NotificationHandler
 
     @content_json
-    def GET(self):
-        user_data = web.input(cluster_id=None)
-        query = db().query(Notification)
-        if user_data.cluster_id:
-            query = query.filter_by(cluster_id=user_data.cluster_id)
+    def get(self):
+        cluster_id = request.args.get("cluster_id")
+        query = Notification.query
+        if cluster_id:
+            query = query.filter_by(cluster_id=cluster_id)
         # Temporarly limit notifications number to prevent bloating UI by
         # lots of old notifications. Normally, this should be done by querying
         # separately unread notifications for notifier and use pagination for
         # list of all notifications
         query = query.limit(1000)
         notifications = query.all()
-        return map(
-            NotificationHandler.render,
-            notifications
-        )
+        return self.render(notifications)
 
     @content_json
-    def PUT(self):
-        data = self.validator.validate_collection_update(web.data())
-        q = db().query(Notification)
+    def put(self):
+        data = self.validator.validate_collection_update(request.data)
+        q = Notification.query
         notifications_updated = []
         for nd in data:
             notification = q.get(nd["id"])
             for key, value in nd.iteritems():
                 setattr(notification, key, value)
             notifications_updated.append(notification)
-            db().add(notification)
-        db().commit()
-        return map(
-            NotificationHandler.render,
-            notifications_updated
-        )
+            db.session.add(notification)
+        db.session.commit()
+        return self.render(notifications_updated)

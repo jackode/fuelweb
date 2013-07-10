@@ -18,7 +18,7 @@ import json
 import web
 from datetime import datetime
 
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.api.models import Notification, Task
 
@@ -29,11 +29,11 @@ def notify(topic, message,
         raise Exception("No node id in discover notification")
     task = None
     if task_uuid:
-        task = db().query(Task).filter_by(uuid=task_uuid).first()
+        task = db.session.query(Task).filter_by(uuid=task_uuid).first()
 
     exist = None
     if node_id and task:
-        exist = db().query(Notification).filter_by(
+        exist = db.session.query(Notification).filter_by(
             node_id=node_id,
             message=message,
             task=task
@@ -48,8 +48,8 @@ def notify(topic, message,
         if task:
             notification.task_id = task.id
         notification.datetime = datetime.now()
-        db().add(notification)
-        db().commit()
+        db.session.add(notification)
+        db.session.commit()
         logger.info(
             "Notification: topic: %s message: %s" % (topic, message)
         )

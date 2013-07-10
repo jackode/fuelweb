@@ -16,16 +16,16 @@
 
 import json
 
-import web
+from flask import request
 
-from nailgun.db import db
 from nailgun.errors import errors
 from nailgun.api.models import Release
 from nailgun.api.validators.release import ReleaseValidator
-from nailgun.api.handlers.base import JSONHandler, content_json
+from nailgun.api.handlers.base import content_json
+from nailgun.api.handlers.base import SingleHandler, CollectionHandler
 
 
-class ReleaseHandler(JSONHandler):
+class ReleaseHandler(SingleHandler):
     fields = (
         "id",
         "name",
@@ -38,52 +38,35 @@ class ReleaseHandler(JSONHandler):
     validator = ReleaseValidator
 
     @content_json
-    def GET(self, release_id):
-        release = self.get_object_or_404(Release, release_id)
-        return self.render(release)
-
-    @content_json
-    def PUT(self, release_id):
+    def put(self, release_id):
         release = self.get_object_or_404(Release, release_id)
 
         data = self.checked_data()
 
         for key, value in data.iteritems():
             setattr(release, key, value)
-        db().commit()
+        db.session.commit()
         return self.render(release)
 
-    def DELETE(self, release_id):
+    def delete(self, release_id):
         release = self.get_object_or_404(Release, release_id)
-        db().delete(release)
-        db().commit()
-        raise web.webapi.HTTPError(
-            status="204 No Content",
-            data=""
-        )
+        db.session.delete(release)
+        db.session.commit()
+        self.abort(204)
 
 
-class ReleaseCollectionHandler(JSONHandler):
+class ReleaseCollectionHandler(CollectionHandler):
 
     validator = ReleaseValidator
+    single = ReleaseHandler
 
     @content_json
-    def GET(self):
-        return map(
-            ReleaseHandler.render,
-            db().query(Release).all()
-        )
-
-    @content_json
-    def POST(self):
+    def post(self):
         data = self.checked_data()
 
         release = Release()
         for key, value in data.iteritems():
             setattr(release, key, value)
-        db().add(release)
-        db().commit()
-        raise web.webapi.created(json.dumps(
-            ReleaseHandler.render(release),
-            indent=4
-        ))
+        db.session.add(release)
+        db.session.commit()
+        return self.render(release), 201

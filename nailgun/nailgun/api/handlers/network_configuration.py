@@ -16,11 +16,10 @@
 
 import json
 import traceback
-import web
 
-from nailgun.db import db
 from nailgun.logger import logger
 from nailgun.api.validators.network import NetworkConfigurationValidator
+from nailgun.database import db
 from nailgun.api.models import Cluster
 from nailgun.api.models import NetworkGroup
 from nailgun.api.models import NetworkConfiguration
@@ -39,20 +38,20 @@ class NetworkConfigurationVerifyHandler(JSONHandler):
     validator = NetworkConfigurationValidator
 
     @content_json
-    def PUT(self, cluster_id):
+    def put(self, cluster_id):
         cluster = self.get_object_or_404(Cluster, cluster_id)
 
         try:
             data = self.validator.validate_networks_update(web.data())
         except web.webapi.badrequest as exc:
             task = Task(name='check_networks', cluster=cluster)
-            db().add(task)
-            db().commit()
+            db.session.add(task)
+            db.session.commit()
             TaskHelper.set_error(task.uuid, exc.data)
             logger.error(traceback.format_exc())
 
             json_task = build_json_response(TaskHandler.render(task))
-            raise web.accepted(data=json_task)
+            self.abort(202, json_task)
 
         vlan_ids = [{
             'name': n['name'],
@@ -82,14 +81,14 @@ class NetworkConfigurationHandler(JSONHandler):
         return json_data
 
     @content_json
-    def GET(self, cluster_id):
+    def get(self, cluster_id):
         cluster = self.get_object_or_404(Cluster, cluster_id)
         result = {}
         result['net_manager'] = cluster.net_manager
         result['networks'] = map(self.render, cluster.network_groups)
         return result
 
-    def PUT(self, cluster_id):
+    def put(self, cluster_id):
         data = json.loads(web.data())
         cluster = self.get_object_or_404(Cluster, cluster_id)
 
@@ -112,7 +111,7 @@ class NetworkConfigurationHandler(JSONHandler):
 
         data = build_json_response(TaskHandler.render(task))
         if task.status == 'error':
-            db().rollback()
+            db.session.rollback()
         else:
-            db().commit()
-        raise web.accepted(data=data)
+            db.session.commit()
+        self.abort(202, data)

@@ -21,7 +21,7 @@ import traceback
 
 import web
 
-from nailgun.db import db
+from nailgun.database import db
 import nailgun.rpc as rpc
 from nailgun.logger import logger
 from nailgun.errors import errors
@@ -37,7 +37,7 @@ class TaskManager(object):
 
     def __init__(self, cluster_id=None):
         if cluster_id:
-            self.cluster = db().query(Cluster).get(cluster_id)
+            self.cluster = db.session.query(Cluster).get(cluster_id)
 
     def _call_silently(self, task, instance, *args, **kwargs):
         method = getattr(instance, kwargs.pop('method_name', 'execute'))
@@ -68,7 +68,7 @@ class DeploymentTaskManager(TaskManager):
                 self.cluster.name or self.cluster.id,
             )
         )
-        current_tasks = db().query(Task).filter_by(
+        current_tasks = db.session.query(Task).filter_by(
             cluster_id=self.cluster.id,
             name="deploy"
         )
@@ -77,9 +77,9 @@ class DeploymentTaskManager(TaskManager):
                 raise errors.DeploymentAlreadyStarted()
             elif task.status in ("ready", "error"):
                 for subtask in task.subtasks:
-                    db().delete(subtask)
-                db().delete(task)
-                db().commit()
+                    db.session.delete(subtask)
+                db.session.delete(task)
+                db.session.commit()
 
         nodes_to_delete = TaskHelper.nodes_to_delete(self.cluster)
         nodes_to_deploy = TaskHelper.nodes_to_deploy(self.cluster)
@@ -89,15 +89,15 @@ class DeploymentTaskManager(TaskManager):
             raise errors.WrongNodeStatus("No changes to deploy")
 
         self.cluster.status = 'deployment'
-        db().add(self.cluster)
-        db().commit()
+        db.session.add(self.cluster)
+        db.session.commit()
 
         supertask = Task(
             name="deploy",
             cluster=self.cluster
         )
-        db().add(supertask)
-        db().commit()
+        db.session.add(supertask)
+        db.session.commit()
         task_deletion, task_provision, task_deployment = None, None, None
 
         if nodes_to_delete:
@@ -123,8 +123,8 @@ class DeploymentTaskManager(TaskManager):
                 method_name='message'
             )
             task_provision.cache = provision_message
-            db().add(task_provision)
-            db().commit()
+            db.session.add(task_provision)
+            db.session.commit()
             task_messages.append(provision_message)
 
         if nodes_to_deploy:
@@ -138,8 +138,8 @@ class DeploymentTaskManager(TaskManager):
                 method_name='message'
             )
             task_deployment.cache = deployment_message
-            db().add(task_deployment)
-            db().commit()
+            db.session.add(task_deployment)
+            db.session.commit()
             task_messages.append(deployment_message)
 
         if task_messages:
@@ -161,10 +161,10 @@ class CheckBeforeDeploymentTaskManager(TaskManager):
             name='check_before_deployment',
             cluster=self.cluster
         )
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         self._call_silently(task, tasks.CheckBeforeDeploymentTask)
-        db().refresh(task)
+        db.session.refresh(task)
         if task.status == 'running':
             TaskHelper.update_task_status(
                 task.uuid, status="ready", progress=100)
@@ -179,14 +179,14 @@ class CheckNetworksTaskManager(TaskManager):
             name="check_networks",
             cluster=self.cluster
         )
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         self._call_silently(
             task,
             tasks.CheckNetworksTask,
             data
         )
-        db().refresh(task)
+        db.session.refresh(task)
         if task.status == 'running':
             TaskHelper.update_task_status(
                 task.uuid,
@@ -203,21 +203,21 @@ class VerifyNetworksTaskManager(TaskManager):
             name="check_networks",
             cluster=self.cluster
         )
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         self._call_silently(
             task,
             tasks.CheckNetworksTask,
             nets
         )
-        db().refresh(task)
+        db.session.refresh(task)
         if task.status != 'error':
             # this one is connected with UI issues - we need to
             # separate if error happened inside nailgun or somewhere
             # in the orchestrator, and UI does it by task name.
             task.name = "verify_networks"
-            db().add(task)
-            db().commit()
+            db.session.add(task)
+            db.session.commit()
             self._call_silently(
                 task,
                 tasks.VerifyNetworksTask,
@@ -229,11 +229,11 @@ class VerifyNetworksTaskManager(TaskManager):
 class ClusterDeletionManager(TaskManager):
 
     def execute(self):
-        current_cluster_tasks = db().query(Task).filter_by(
+        current_cluster_tasks = db.session.query(Task).filter_by(
             cluster=self.cluster,
             name='cluster_deletion'
         ).all()
-        deploy_running = db().query(Task).filter_by(
+        deploy_running = db.session.query(Task).filter_by(
             cluster=self.cluster,
             name='deploy',
             status='running'
@@ -252,24 +252,24 @@ class ClusterDeletionManager(TaskManager):
                 raise errors.DeletionAlreadyStarted()
             elif task.status in ("ready", "error"):
                 for subtask in task.subtasks:
-                    db().delete(subtask)
-                db().delete(task)
-                db().commit()
+                    db.session.delete(subtask)
+                db.session.delete(task)
+                db.session.commit()
 
         logger.debug("Labeling cluster nodes to delete")
         for node in self.cluster.nodes:
             node.pending_deletion = True
-            db().add(node)
-            db().commit()
+            db.session.add(node)
+            db.session.commit()
 
         self.cluster.status = 'remove'
-        db().add(self.cluster)
-        db().commit()
+        db.session.add(self.cluster)
+        db.session.commit()
 
         logger.debug("Creating cluster deletion task")
         task = Task(name="cluster_deletion", cluster=self.cluster)
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         self._call_silently(
             task,
             tasks.ClusterDeletionTask
@@ -285,8 +285,8 @@ class DownloadReleaseTaskManager(TaskManager):
     def execute(self):
         logger.debug("Creating release dowload task")
         task = Task(name="download_release")
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         self._call_silently(
             task,
             tasks.DownloadReleaseTask,

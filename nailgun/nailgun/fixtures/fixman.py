@@ -27,11 +27,9 @@ import sqlalchemy.types
 from nailgun.settings import settings
 from nailgun.api import models
 from sqlalchemy import orm
-from nailgun.db import db as ormgen
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.network.manager import NetworkManager
-
-db = ormgen()
 
 
 def capitalize_model_name(model_name):
@@ -46,7 +44,6 @@ def template_fixture(fileobj, config=None):
 
 
 def upload_fixture(fileobj):
-    db.expunge_all()
     fixture = json.load(template_fixture(fileobj))
 
     queue = Queue.Queue()
@@ -69,7 +66,7 @@ def upload_fixture(fileobj):
         keys[obj['model'].__tablename__] = {}
 
         # Check if it's already uploaded
-        obj_from_db = db.query(obj['model']).get(pk)
+        obj_from_db = db.session.query(obj['model']).get(pk)
         if obj_from_db:
             logger.info("Fixture model '%s' with pk='%s' already"
                         " uploaded. Skipping", model_name, pk)
@@ -141,25 +138,25 @@ def upload_fixture(fileobj):
 
         for field, data in fk_fields.iteritems():
             if isinstance(data[0], int):
-                setattr(new_obj, field, db.query(data[1]).get(data[0]))
+                setattr(new_obj, field, db.session.query(data[1]).get(data[0]))
             elif isinstance(data[0], list):
                 for v in data[0]:
                     getattr(new_obj, field).append(
                         db.query(data[1]).get(v)
                     )
-        db.add(new_obj)
-        db.commit()
+        db.session.add(new_obj)
+        db.session.commit()
         keys[obj['model'].__tablename__][obj["pk"]] = new_obj
 
         # UGLY HACK for testing
         if new_obj.__class__.__name__ == 'Node':
             new_obj.attributes = models.NodeAttributes()
-            db.commit()
+            db.session.commit()
             new_obj.attributes.volumes = \
                 new_obj.volume_manager.gen_default_volumes_info()
             network_manager = NetworkManager()
             network_manager.update_interfaces_info(new_obj.id)
-            db.commit()
+            db.session.commit()
 
 
 def upload_fixtures():
@@ -180,7 +177,7 @@ def dump_fixture(model_name):
     dump = []
     app_name = 'nailgun'
     model = getattr(models, capitalize_model_name(model_name))
-    for obj in db.query(model).all():
+    for obj in model.query.all():
         obj_dump = {}
         obj_dump['pk'] = getattr(obj, model.__mapper__.primary_key[0].name)
         obj_dump['model'] = "%s.%s" % (app_name, model_name)

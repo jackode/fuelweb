@@ -25,7 +25,7 @@ import nailgun.rpc as rpc
 from nailgun.settings import settings
 from nailgun.logger import logger
 from nailgun.rpc.receiver import NailgunReceiver
-from nailgun.db import db
+from nailgun.database import db
 
 
 class RPCConsumer(ConsumerMixin):
@@ -44,10 +44,10 @@ class RPCConsumer(ConsumerMixin):
             callback(**body["args"])
         except Exception as exc:
             logger.error(traceback.format_exc())
-            db().rollback()
+            db.session.rollback()
         finally:
-            db().commit()
-            db().expire_all()
+            db.session.commit()
+            db.session.expire_all()
         msg.ack()
 
 

@@ -47,8 +47,9 @@ from nailgun.api.models import IPAddr
 from nailgun.api.models import Vlan
 from nailgun.logger import logger
 from nailgun.api.urls import urls
-from nailgun.wsgi import build_app
-from nailgun.db import dropdb, syncdb, flush, db
+from nailgun.wsgi import load_urls
+from nailgun.application import application
+from nailgun.database import db, dropdb, syncdb, flush
 from nailgun.fixtures.fixman import upload_fixture
 from nailgun.network.manager import NetworkManager
 from nailgun.network.topology import TopoChecker
@@ -651,8 +652,9 @@ class BaseHandlers(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.db = db()
-        cls.app = TestApp(build_app().wsgifunc())
+        cls.db = db.session
+        load_urls()
+        cls.app = TestApp(application.wsgi_app)
         nailgun.task.task.DeploymentTask._prepare_syslog_dir = mock.Mock()
         # dropdb()
         syncdb()
@@ -666,7 +668,7 @@ class BaseHandlers(TestCase):
             "Content-Type": "application/json"
         }
         flush()
-        self.env = Environment(app=self.app)
+        self.env = Environment(app=self.app, db=self.db)
         self.env.upload_fixtures(self.fixtures)
 
     def tearDown(self):
@@ -711,20 +713,14 @@ def fake_tasks(fake_rpc=True,
 
 
 def reverse(name, kwargs=None):
-    urldict = dict(zip(urls[1::2], urls[::2]))
+    urldict = dict(
+        (handler.__name__, url) for url, handler in urls
+    )
     url = urldict[name]
-    urlregex = re.compile(url)
-    for kwarg in urlregex.groupindex:
-        if not kwarg in kwargs:
-            raise KeyError("Invalid argument specified")
-        url = re.sub(
-            r"\(\?P<{0}>[^)]+\)".format(kwarg),
-            str(kwargs[kwarg]),
-            url,
-            1
-        )
-    url = re.sub(r"\??\$", "", url)
-    return "/api" + url
+    if kwargs:
+        for key, val in kwargs.iteritems():
+            url = re.sub(r'\<(.*){0}\>'.format(key), str(val), url)
+    return url
 
 
 # this method is for development and troubleshooting purposes

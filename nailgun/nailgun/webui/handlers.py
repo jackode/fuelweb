@@ -14,29 +14,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import web
-import mimetypes
-import posixpath
+from flask import render_template
 
 from nailgun.settings import settings
 from nailgun.logger import logger
-
-render = web.template.render(settings.TEMPLATE_DIR)
-
-
-class IndexHandler(object):
-    def GET(self):
-        return render.index()
+from flask.views import MethodView
 
 
-class StaticHandler(object):
-    def GET(self, fl):
-        fl_path = posixpath.join(settings.STATIC_DIR, fl)
-        mimetype = mimetypes.guess_type(fl_path)[0]
-        if mimetype:
-            web.header("Content-Type", mimetype)
-        try:
-            f = open(fl_path, 'r')
-            return f.read()
-        except:
-            raise web.notfound()
+class IndexHandler(MethodView):
+    def get(self):
+        return render_template("index.html")

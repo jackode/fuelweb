@@ -16,28 +16,21 @@
 
 import os
 import sys
-import web
 from signal import signal, SIGTERM
-from web.httpserver import server, WSGIServer, StaticMiddleware
+
+from flask.ext.sqlalchemy import SQLAlchemy
 
 curdir = os.path.dirname(__file__)
 sys.path.insert(0, curdir)
 
 from nailgun.settings import settings
-from nailgun.api.handlers import check_client_content_type
-from nailgun.api.handlers import forbid_client_caching
-from nailgun.db import load_db_driver, engine
+
 from nailgun.urls import urls
+from nailgun.application import application
 from nailgun.logger import logger, HTTPLoggerMiddleware
 
 
-def build_app():
-    app = web.application(urls, locals())
-    app.add_processor(load_db_driver)
-    app.add_processor(forbid_client_caching)
-    return app
-
-
+# TODO: logging middleware
 def build_middleware(app):
     middleware_list = [
         HTTPLoggerMiddleware
@@ -49,21 +42,28 @@ def build_middleware(app):
     return app(*middleware_list)
 
 
-def run_server(func, server_address=('0.0.0.0', 8080)):
-    """
-    This function same as runsimple from web/httpserver
-    except removed LogMiddleware because we use
-    HTTPLoggerMiddleware instead
-    """
-    global server
-    func = StaticMiddleware(func)
-    server = WSGIServer(server_address, func)
-    print 'http://%s:%d/' % server_address
+def load_urls(app=None):
+    if not app:
+        app = application
 
-    try:
-        server.start()
-    except (KeyboardInterrupt, SystemExit):
-        server.stop()
+    from nailgun.urls import urls
+
+    app.url_map.strict_slashes = False
+    for url, handler in urls:
+        app.add_url_rule(
+            url,
+            view_func=handler.as_view(str(handler))
+        )
+    return app
+
+
+def run_server(debug=False, **kwargs):
+    load_urls()
+    application.run(
+        debug=debug,
+        host=kwargs.get("host") or settings.LISTEN_ADDRESS,
+        port=kwargs.get("port") or int(settings.LISTEN_PORT)
+    )
 
 
 def appstart(keepalive=False):
@@ -72,13 +72,6 @@ def appstart(keepalive=False):
         settings.COMMIT_SHA,
         settings.FUEL_COMMIT_SHA
     ))
-    if not engine.dialect.has_table(engine.connect(), "nodes"):
-        logger.error(
-            "Database tables not created. Try './manage.py syncdb' first"
-        )
-        sys.exit(1)
-
-    app = build_app()
 
     from nailgun.rpc import threaded
     from nailgun.keepalive import keep_alive
@@ -97,10 +90,13 @@ def appstart(keepalive=False):
         rpc_process.start()
     logger.info("Running WSGI app...")
 
-    wsgifunc = build_middleware(app.wsgifunc)
+    #wsgifunc = build_middleware(app.wsgifunc)
 
-    run_server(wsgifunc,
-               (settings.LISTEN_ADDRESS, int(settings.LISTEN_PORT)))
+    run_server(
+        host=settings.LISTEN_ADDRESS,
+        port=int(settings.LISTEN_PORT),
+        debug=True
+    )
 
     logger.info("Stopping WSGI app...")
     if keep_alive.is_alive():

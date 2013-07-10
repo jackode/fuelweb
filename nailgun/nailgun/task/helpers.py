@@ -18,7 +18,7 @@ import os
 import shutil
 import logging
 
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.logger import logger
 from nailgun.api.models import Task
 from nailgun.api.models import IPAddr
@@ -44,7 +44,7 @@ class TaskHelper(object):
             if n.fqdn != fqdn:
                 n.fqdn = fqdn
                 logger.debug("Updating node fqdn: %s %s", n.id, n.fqdn)
-                db().commit()
+                db.session.commit()
 
     @classmethod
     def prepare_syslog_dir(cls, node, prefix=None):
@@ -61,7 +61,7 @@ class TaskHelper(object):
         admin_net_id = netmanager.get_admin_network_id()
         links = map(
             lambda i: os.path.join(prefix, i.ip_addr),
-            db().query(IPAddr.ip_addr).
+            db.session.query(IPAddr.ip_addr).
             filter_by(node=node.id).
             filter_by(network=admin_net_id).all()
         )
@@ -115,7 +115,7 @@ class TaskHelper(object):
     @classmethod
     def update_task_status(cls, uuid, status, progress, msg="", result=None):
         logger.debug("Updating task: %s", uuid)
-        task = db().query(Task).filter_by(uuid=uuid).first()
+        task = db.session.query(Task).filter_by(uuid=uuid).first()
         if not task:
             logger.error("Can't set status='%s', message='%s':no task \
                     with UUID %s found!", status, msg, uuid)
@@ -133,10 +133,9 @@ class TaskHelper(object):
                         value
                     )
                 )
-        db().add(task)
-        db().commit()
-
-        if previous_status != status and task.cluster_id:
+        db.session.add(task)
+        db.session.commit()
+        if previous_status != status:
             logger.debug("Updating cluster status: "
                          "cluster_id: %s status: %s",
                          task.cluster_id, status)
@@ -147,7 +146,7 @@ class TaskHelper(object):
 
     @classmethod
     def update_parent_task(cls, uuid):
-        task = db().query(Task).filter_by(uuid=uuid).first()
+        task = db.session.query(Task).filter_by(uuid=uuid).first()
         subtasks = task.subtasks
         if len(subtasks):
             if all(map(lambda s: s.status == 'ready', subtasks)):
@@ -156,8 +155,8 @@ class TaskHelper(object):
                 task.message = '; '.join(map(
                     lambda s: s.message, filter(
                         lambda s: s.message is not None, subtasks)))
-                db().add(task)
-                db().commit()
+                db.session.add(task)
+                db.session.commit()
                 cls.update_cluster_status(uuid)
             elif all(map(lambda s: s.status in ('ready', 'error'), subtasks)):
                 task.status = 'error'
@@ -165,8 +164,8 @@ class TaskHelper(object):
                 task.message = '; '.join(map(
                     lambda s: s.message, filter(
                         lambda s: s.status == 'error', subtasks)))
-                db().add(task)
-                db().commit()
+                db.session.add(task)
+                db.session.commit()
                 cls.update_cluster_status(uuid)
             else:
                 subtasks_with_progress = filter(
@@ -187,14 +186,12 @@ class TaskHelper(object):
                     )
                 else:
                     task.progress = 0
-                db().add(task)
-                db().commit()
+                db.session.add(task)
+                db.session.commit()
 
     @classmethod
     def update_cluster_status(cls, uuid):
-        task = db().query(Task).filter_by(uuid=uuid).first()
-        # FIXME: should be moved to task/manager "finish" method after
-        # web.ctx.orm issue is addressed
+        task = db.session.query(Task).filter_by(uuid=uuid).first()
         cluster = task.cluster
         if task.name == 'deploy':
             if task.status == 'ready':
@@ -202,7 +199,6 @@ class TaskHelper(object):
                 # (check if all of the required nodes of required roles are
                 # present). If cluster is not "valid", we should also set
                 # its status to "error" even if it is deployed successfully.
-                # This method is also would be affected by web.ctx.orm issue.
                 cls.__set_cluster_status(cluster, 'operational')
                 cluster.clear_pending_changes()
             elif task.status == 'error':
@@ -210,7 +206,7 @@ class TaskHelper(object):
         elif task.name == 'provision':
             if task.status == 'error':
                 cls.__set_cluster_status(cluster, 'error')
-        db().commit()
+        db.session.commit()
 
     @classmethod
     def __set_cluster_status(cls, cluster, new_state):

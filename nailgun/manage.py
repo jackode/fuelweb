@@ -19,7 +19,6 @@ import os
 import sys
 import argparse
 import code
-import web
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -99,7 +98,6 @@ if __name__ == "__main__":
         'dump_settings', help='dump current settings to YAML'
     )
     params, other_params = parser.parse_known_args()
-    sys.argv.pop(1)
 
     if params.action == "dumpdata":
         import logging
@@ -113,12 +111,12 @@ if __name__ == "__main__":
 
     if params.action == "syncdb":
         logger.info("Syncing database...")
-        from nailgun.db import syncdb
+        from nailgun.database import syncdb
         syncdb()
         logger.info("Done")
     elif params.action == "dropdb":
         logger.info("Dropping database...")
-        from nailgun.db import dropdb
+        from nailgun.database import dropdb
         dropdb()
         logger.info("Done")
     elif params.action == "test":
@@ -154,13 +152,13 @@ if __name__ == "__main__":
         from nailgun.wsgi import appstart
         appstart(keepalive=params.keepalive)
     elif params.action == "shell":
-        from nailgun.db import db
+        from nailgun.database import db
         if params.config_file:
             settings.update_from_file(params.config_file)
         try:
             from IPython import embed
             embed()
         except ImportError:
-            code.interact(local={'db': db, 'settings': settings})
+            code.interact(local={'db': db.session, 'settings': settings})
     else:
         parser.print_help()

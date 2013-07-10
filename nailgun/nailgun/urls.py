@@ -14,10 +14,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from nailgun.api import urls as api_urls
-from nailgun.webui import urls as webui_urls
+from nailgun.api.urls import urls as api_urls
+from nailgun.webui.urls import urls as webui_urls
 
-urls = (
-    "/api", api_urls.app,
-    "", webui_urls.app
-)
+urls = []
+urls.extend(api_urls)
+urls.extend(webui_urls)

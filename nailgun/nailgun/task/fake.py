@@ -24,6 +24,7 @@ from random import randrange, shuffle
 from kombu import Connection, Exchange, Queue
 from sqlalchemy.orm import object_mapper, ColumnProperty
 
+from nailgun.database import db
 from nailgun.settings import settings
 from nailgun.logger import logger
 from nailgun.errors import errors
@@ -31,7 +32,6 @@ from nailgun import notifier
 from nailgun.api.models import Network, Node, NodeAttributes
 from nailgun.network.manager import NetworkManager
 from nailgun.rpc.receiver import NailgunReceiver
-from nailgun.db import db
 
 
 class FakeThread(threading.Thread):
@@ -265,13 +265,13 @@ class FakeDeletionThread(FakeThread):
                 continue
 
             node.status = 'discover'
-            db().add(node)
-            db().commit()
+            db.session.add(node)
+            db.session.commit()
             node.attributes = NodeAttributes(node_id=node.id)
             node.attributes.volumes = node.volume_manager.gen_volumes_info()
             network_manager = NetworkManager()
-            network_manager.update_interfaces_info(node.id)
-            db().commit()
+            network_manager.update_interfaces_info(node)
+            db.session.commit()
 
             ram = round(node.meta.get('ram') or 0, 1)
             cores = node.meta.get('cores') or 'unknown'

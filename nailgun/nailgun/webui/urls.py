@@ -14,13 +14,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import web
-
-from nailgun.webui.handlers import IndexHandler, StaticHandler
+from nailgun.webui.handlers import IndexHandler
 
 urls = (
-    r"/static/(.*)", 'StaticHandler',
-    r"/", 'IndexHandler',
+    ("/", IndexHandler),
 )
-
-app = web.application(urls, locals())

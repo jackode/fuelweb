@@ -15,7 +15,7 @@
 
 from netaddr import IPNetwork, AddrFormatError
 
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.errors import errors
 from nailgun.api.models import Node, NetworkGroup
 from nailgun.api.validators.base import BasicValidator
@@ -144,7 +144,7 @@ class NetAssignmentValidator(BasicValidator):
 
     @classmethod
     def verify_data_correctness(cls, node):
-        db_node = db().query(Node).filter_by(id=node['id']).first()
+        db_node = db.session.query(Node).filter_by(id=node['id']).first()
         if not db_node:
             raise errors.InvalidData(
                 "There is no node with ID '%d' in DB" % node['id'],
@@ -159,7 +159,7 @@ class NetAssignmentValidator(BasicValidator):
             )
         # FIXIT: we should use not all networks but appropriate for this
         # node only.
-        db_network_groups = db().query(NetworkGroup).filter_by(
+        db_network_groups = db.session.query(NetworkGroup).filter_by(
             cluster_id=db_node.cluster_id
         ).all()
         if not db_network_groups:

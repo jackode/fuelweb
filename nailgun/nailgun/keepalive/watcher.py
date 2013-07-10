@@ -22,7 +22,7 @@ from itertools import repeat
 from sqlalchemy.sql import not_
 
 from nailgun import notifier
-from nailgun.db import db
+from nailgun.database import db
 from nailgun.settings import settings
 from nailgun.api.models import Node
 from nailgun.logger import logger

@@ -21,13 +21,13 @@ from nailgun.api.models import NetworkAssignment
 from nailgun.api.models import NodeNICInterface
 
 from nailgun.logger import logger
-from nailgun.db import db
+from nailgun.database import db
 
 
 class TopoChecker(object):
     @classmethod
     def _is_assignment_allowed_for_node(cls, node):
-        db_node = db().query(Node).filter_by(id=node['id']).first()
+        db_node = db.session.query(Node).filter_by(id=node['id']).first()
         interfaces = node['interfaces']
         db_interfaces = db_node.interfaces
         allowed_network_ids = set([n.id for n in db_node.allowed_networks])

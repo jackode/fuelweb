@@ -19,6 +19,7 @@ import logging
 
 from flask import request
 
+from nailgun.database import db
 from nailgun.api.models import Notification
 from nailgun.api.validators.notification import NotificationValidator
 from nailgun.api.handlers.base import JSONHandler, content_json

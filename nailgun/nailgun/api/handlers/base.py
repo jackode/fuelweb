@@ -28,6 +28,7 @@ from flask.views import MethodView, MethodViewType
 
 from nailgun.errors import errors
 from nailgun.logger import logger
+from nailgun import notifier
 from nailgun.api.validators.base import BasicValidator
 
 
@@ -105,9 +106,10 @@ class JSONHandler(MethodView):
     fields = []
 
     def abort(self, status_code, body=None, headers={}):
+        response = Response(body, status=status_code)
         raise JSONHTTPException(
             body,
-            Response(body, status=status_code),
+            response,
             status_code
         )
 
@@ -214,9 +216,14 @@ class SingleHandler(JSONHandler):
     fields = ("id",)
 
     @content_json
-    def get(self, *args):
+    def get(self, *args, **kwargs):
+        obj_id = None
+        if args:
+            obj_id = args[0]
+        elif kwargs:
+            obj_id = kwargs.values()[0]
         return self.render(
-            self.get_object_or_404(self.model, args[0])
+            self.get_object_or_404(self.model, obj_id)
         )
 
 
@@ -233,7 +240,7 @@ class CollectionHandler(JSONHandler):
 
     @classmethod
     def render_one(cls, instance, fields=None):
-        return JSONHandler.render(
+        return cls.single.render(
             instance,
             fields or cls.fields or cls.single.fields
         )

@@ -332,6 +332,7 @@ class TestHandlers(BaseHandlers):
             json.dumps(test_data1),
             headers=self.default_headers
         )
+        self.env.refresh_nodes()
         test_data2 = [{
             "id": "test",
             "type": "disk",

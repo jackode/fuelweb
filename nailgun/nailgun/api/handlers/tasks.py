@@ -16,7 +16,7 @@
 
 import json
 
-from flask import request
+from flask import request, Response
 
 from nailgun.database import db
 from nailgun.api.models import Task
@@ -45,7 +45,9 @@ class TaskHandler(SingleHandler):
             db.session.delete(subtask)
         db.session.delete(task)
         db.session.commit()
-        return self.abort(204)
+        resp = Response(status=204)
+        del resp.headers['content-type']
+        return resp
 
 
 class TaskCollectionHandler(CollectionHandler):

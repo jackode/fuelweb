@@ -33,7 +33,7 @@ class RedHatAccountHandler(JSONHandler):
     validator = RedHatAcountValidator
 
     @content_json
-    def POST(self):
+    def post(self):
         data = self.checked_data()
         release_data = {'release_id': data['release_id']}
         data.pop('release_id')

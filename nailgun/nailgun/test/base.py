@@ -33,6 +33,7 @@ from functools import partial, wraps
 from paste.fixture import TestApp, AppError
 
 import nailgun
+from nailgun.urls import urls
 from nailgun.api.models import Node
 from nailgun.api.models import NodeNICInterface
 from nailgun.api.models import Release
@@ -49,7 +50,7 @@ from nailgun.logger import logger
 from nailgun.api.urls import urls
 from nailgun.wsgi import load_urls
 from nailgun.application import application
-from nailgun.database import db, dropdb, syncdb, flush
+from nailgun.database import db, dropdb, syncdb, flush, make_session
 from nailgun.fixtures.fixman import upload_fixture
 from nailgun.network.manager import NetworkManager
 from nailgun.network.topology import TopoChecker
@@ -61,8 +62,8 @@ class TimeoutError(Exception):
 
 class Environment(object):
 
-    def __init__(self, app):
-        self.db = db()
+    def __init__(self, app, session=None):
+        self.db = session or make_session()
         self.app = app
         self.tester = TestCase
         self.tester.runTest = lambda a: None
@@ -507,6 +508,8 @@ class Environment(object):
                 return item
 
     def launch_deployment(self):
+        self.refresh_nodes()
+        self.refresh_clusters()
         if self.clusters:
             resp = self.app.put(
                 reverse(
@@ -515,6 +518,8 @@ class Environment(object):
                 headers=self.default_headers)
             self.tester.assertEquals(200, resp.status)
             response = json.loads(resp.body)
+            self.refresh_nodes()
+            self.refresh_clusters()
             return self.db.query(Task).filter_by(
                 uuid=response['uuid']
             ).first()
@@ -554,6 +559,10 @@ class Environment(object):
                 "Nothing to verify - try creating cluster"
             )
 
+    def refresh_object(self, obj):
+        self.db.add(obj)
+        self.db.refresh(obj)
+
     def refresh_nodes(self):
         for n in self.nodes[:]:
             try:
@@ -565,9 +574,10 @@ class Environment(object):
     def refresh_clusters(self):
         for n in self.clusters[:]:
             try:
+                self.db.add(n)
                 self.db.refresh(n)
             except:
-                self.nodes.remove(n)
+                self.clusters.remove(n)
 
     def _wait_task(self, task, timeout, message):
         timer = time.time()
@@ -629,9 +639,31 @@ class BaseHandlers(TestCase):
     def __init__(self, *args, **kwargs):
         super(BaseHandlers, self).__init__(*args, **kwargs)
         self.mock = mock
+        self.db = db.session
         self.default_headers = {
             "Content-Type": "application/json"
         }
+        self.app = TestApp(application.wsgi_app)
+        load_urls(urls)
+        nailgun.task.task.DeploymentTask._prepare_syslog_dir = mock.Mock()
+        self.monkey_patch_refresh()
+
+    def monkey_patch_refresh(self):
+        def request_with_refresh(method, *args, **kwargs):
+            res = method(*args, **kwargs)
+            self.env.refresh_nodes()
+            self.env.refresh_clusters()
+            return res
+
+        for method in ('get', 'put', 'post', 'delete'):
+            setattr(
+                self.app,
+                method,
+                partial(
+                    request_with_refresh,
+                    getattr(self.app, method)
+                )
+            )
 
     def _wait_for_threads(self):
         # wait for fake task thread termination
@@ -650,29 +682,16 @@ class BaseHandlers(TestCase):
                             )
                         )
 
-    @classmethod
-    def setUpClass(cls):
-        cls.db = db.session
-        load_urls()
-        cls.app = TestApp(application.wsgi_app)
-        nailgun.task.task.DeploymentTask._prepare_syslog_dir = mock.Mock()
-        # dropdb()
-        syncdb()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.db.commit()
-
     def setUp(self):
-        self.default_headers = {
-            "Content-Type": "application/json"
-        }
-        flush()
-        self.env = Environment(app=self.app, db=self.db)
+        #flush()
+        db.drop_all()
+        db.create_all()
+        self.env = Environment(app=self.app, session=self.db)
         self.env.upload_fixtures(self.fixtures)
 
     def tearDown(self):
-        self.db.expunge_all()
+        db.session.remove()
+        db.drop_all()
 
 
 def fake_tasks(fake_rpc=True,

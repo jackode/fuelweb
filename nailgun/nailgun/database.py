@@ -26,7 +26,6 @@ else:
 engine = create_engine(db_str, client_encoding='utf8')
 
 application.config['SQLALCHEMY_DATABASE_URI'] = db_str
-db = SQLAlchemy(application)
 
 
 class NoCacheQuery(BaseQuery):
@@ -39,6 +38,14 @@ class NoCacheQuery(BaseQuery):
     def __init__(self, *args, **kwargs):
         self._populate_existing = True
         super(NoCacheQuery, self).__init__(*args, **kwargs)
+
+
+db = SQLAlchemy(
+    application,
+    session_options={
+        "query_cls": NoCacheQuery
+    }
+)
 
 
 def syncdb():
@@ -73,7 +80,7 @@ def dropdb():
 
 def make_session():
     return scoped_session(
-        sessionmaker(bind=engine, query_cls=NoCacheQuery)
+        sessionmaker(bind=db.engine, query_cls=NoCacheQuery)
     )()
 
 

@@ -15,8 +15,9 @@
 #    under the License.
 
 
-import web
 import json
+
+from flask import request
 
 from nailgun.api.handlers.base \
     import JSONHandler, content_json, build_json_response
@@ -34,7 +35,7 @@ class PluginCollectionHandler(JSONHandler):
     def POST(self):
         plugin_manager = PluginManager()
         task = plugin_manager.add_install_plugin_task(
-            json.loads(web.data()))
+            json.loads(request.data))
 
         return TaskHandler.render(task)
 

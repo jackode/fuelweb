@@ -23,6 +23,8 @@ import tarfile
 import tempfile
 from itertools import dropwhile
 
+from flask import make_response, request
+
 from nailgun.settings import settings
 from nailgun.api.models import Node
 from nailgun.api.handlers.base import JSONHandler, content_json
@@ -64,8 +66,8 @@ def read_backwards(file, bufsize=4096):
 class LogEntryCollectionHandler(JSONHandler):
 
     @content_json
-    def GET(self):
-        user_data = web.input()
+    def get(self):
+        user_data = request.args
         date_before = user_data.get('date_before')
         if date_before:
             try:
@@ -73,7 +75,7 @@ class LogEntryCollectionHandler(JSONHandler):
                                             settings.UI_LOG_DATE_FORMAT)
             except ValueError:
                 logger.debug("Invalid 'date_before' value: %s", date_before)
-                raise web.badrequest("Invalid 'date_before' value")
+                self.abort(400, "Invalid 'date_before' value")
         date_after = user_data.get('date_after')
         if date_after:
             try:
@@ -81,21 +83,21 @@ class LogEntryCollectionHandler(JSONHandler):
                                            settings.UI_LOG_DATE_FORMAT)
             except ValueError:
                 logger.debug("Invalid 'date_after' value: %s", date_after)
-                raise web.badrequest("Invalid 'date_after' value")
+                self.abort(400, "Invalid 'date_after' value")
         truncate_log = bool(user_data.get('truncate_log'))
 
         if not user_data.get('source'):
             logger.debug("'source' must be specified")
-            raise web.badrequest("'source' must be specified")
+            self.abort(400, "'source' must be specified")
 
-        log_config = filter(lambda lc: lc['id'] == user_data.source,
+        log_config = filter(lambda lc: lc['id'] == user_data.get('source'),
                             settings.LOGS)
         # If log source not found or it is fake source but we are run without
         # fake tasks.
         if not log_config or (log_config[0].get('fake') and
                               not settings.FAKE_TASKS):
             logger.debug("Log source %r not found", user_data.source)
-            return web.notfound("Log source not found")
+            self.abort(404, "Log source not found")
         log_config = log_config[0]
 
         # If it is 'remote' and not 'fake' log source then calculate log file
@@ -104,13 +106,13 @@ class LogEntryCollectionHandler(JSONHandler):
         node = None
         if log_config['remote'] and not log_config.get('fake'):
             if not user_data.get('node'):
-                raise web.badrequest("'node' must be specified")
-            node = Node.query.get(user_data.node)
+                self.abort(400, "'node' must be specified")
+            node = Node.query.get(user_data.get("node"))
             if not node:
-                return web.notfound("Node not found")
+                self.abort(400, "Node not found")
             if not node.ip:
                 logger.error('Node %r has no assigned ip', node.id)
-                raise web.internalerror("Node has no assigned ip")
+                self.abort(500, "Node has no assigned ip")
 
             if node.status == "discover":
                 ndir = node.ip
@@ -121,7 +123,7 @@ class LogEntryCollectionHandler(JSONHandler):
             if not os.path.exists(remote_log_dir):
                 logger.debug("Log files dir %r for node %s not found",
                              remote_log_dir, node.id)
-                return web.notfound("Log files dir for node not found")
+                self.abort(404, "Log files dir for node not found")
 
             log_file = os.path.join(remote_log_dir, log_config['path'])
         else:
@@ -133,13 +135,13 @@ class LogEntryCollectionHandler(JSONHandler):
                              log_file, node.id)
             else:
                 logger.debug("Log file %r not found", log_file)
-            return web.notfound("Log file not found")
+            self.abort(404, "Log file not found")
 
         level = user_data.get('level')
         allowed_levels = log_config['levels']
         if level is not None:
             if not (level in log_config['levels']):
-                raise web.badrequest("Invalid level")
+                self.abort(400, "Invalid level")
             allowed_levels = [l for l in dropwhile(lambda l: l != level,
                                                    log_config['levels'])]
         try:
@@ -147,7 +149,7 @@ class LogEntryCollectionHandler(JSONHandler):
         except re.error, e:
             logger.error('Invalid regular expression for file %r: %s',
                          log_config['id'], e)
-            raise web.internalerror("Invalid regular expression in config")
+            self.abort(500, "Invalid regular expression in config")
 
         entries = []
         to_byte = None
@@ -155,7 +157,7 @@ class LogEntryCollectionHandler(JSONHandler):
             to_byte = int(user_data.get('to', 0))
         except ValueError:
             logger.debug("Invalid 'to' value: %d", to_byte)
-            raise web.badrequest("Invalid 'to' value")
+            self.abort(400, "Invalid 'to' value")
 
         log_file_size = os.stat(log_file).st_size
         if to_byte >= log_file_size:
@@ -170,7 +172,7 @@ class LogEntryCollectionHandler(JSONHandler):
                                             settings.TRUNCATE_LOG_ENTRIES))
         except ValueError:
             logger.debug("Invalid 'max_entries' value: %d", max_entries)
-            raise web.badrequest("Invalid 'max_entries' value")
+            self.abort(400, "Invalid 'max_entries' value")
 
         has_more = False
         with open(log_file, 'r') as f:
@@ -232,9 +234,9 @@ class LogEntryCollectionHandler(JSONHandler):
         }
 
 
-class LogPackageHandler(object):
+class LogPackageHandler(JSONHandler):
 
-    def GET(self):
+    def get(self):
         f = tempfile.TemporaryFile(mode='r+b')
         tf = tarfile.open(fileobj=f, mode='w:gz')
         for arcname, path in settings.LOGS_TO_PACK_FOR_SUPPORT.items():
@@ -243,25 +245,28 @@ class LogPackageHandler(object):
 
         filename = 'fuelweb-logs-%s.tar.gz' % (
             time.strftime('%Y-%m-%d_%H:%M:%S', time.localtime()))
-        web.header('Content-Type', 'application/octet-stream')
-        web.header('Content-Disposition', 'attachment; filename="%s"' % (
-            filename))
-        web.header('Content-Length', f.tell())
+
+        length = f.tell()
         f.seek(0)
-        return f
+        response = make_response(f.read())
+        response.headers['Content-Type'] = 'application/octet-stream'
+        response.headers['Content-Disposition'] = \
+            'attachment; filename="%s"' % (filename)
+        response.headers['Content-Length'] = length
+        return response
 
 
 class LogSourceCollectionHandler(JSONHandler):
 
     @content_json
-    def GET(self):
+    def get(self):
         return settings.LOGS
 
 
 class LogSourceByNodeCollectionHandler(JSONHandler):
 
     @content_json
-    def GET(self, node_id):
+    def get(self, node_id):
         node = self.get_object_or_404(Node, node_id)
 
         def getpath(x):

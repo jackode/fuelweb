@@ -363,17 +363,18 @@ class TestTaskManagers(BaseHandlers):
 
     def test_deletion_empty_cluster_task_manager(self):
         cluster = self.env.create_cluster(api=True)
+        cluster_id = cluster["id"]
         resp = self.app.delete(
             reverse(
                 'ClusterHandler',
-                kwargs={'cluster_id': self.env.clusters[0].id}),
+                kwargs={'cluster_id': cluster_id}),
             headers=self.default_headers
         )
         self.assertEquals(202, resp.status)
 
         timer = time.time()
         timeout = 15
-        clstr = self.db.query(Cluster).get(self.env.clusters[0].id)
+        clstr = self.db.query(Cluster).get(cluster_id)
         while clstr:
             time.sleep(1)
             try:

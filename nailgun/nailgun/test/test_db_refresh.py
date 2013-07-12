@@ -22,25 +22,19 @@ from paste.fixture import TestApp
 from sqlalchemy.orm.events import orm
 
 from nailgun.api.models import Node
-from nailgun.db import engine
-from nailgun.db import dropdb, syncdb, flush, NoCacheQuery
-from nailgun.wsgi import build_app
+
+from nailgun.database import db
+from nailgun.database import dropdb, syncdb, flush, NoCacheQuery
+from nailgun.application import application
 
 
 class TestDBRefresh(TestCase):
 
     def setUp(self):
-        self.app = TestApp(build_app().wsgifunc())
-        self.db = orm.scoped_session(
-            orm.sessionmaker(bind=engine, query_cls=NoCacheQuery)
-        )()
-        self.db2 = orm.scoped_session(
-            orm.sessionmaker(bind=engine, query_cls=NoCacheQuery)
-        )()
-        self.default_headers = {
-            "Content-Type": "application/json"
-        }
-        flush()
+        db.drop_all()
+        db.create_all()
+        self.db = db.create_scoped_session({"query_cls": NoCacheQuery})
+        self.db2 = db.create_scoped_session({"query_cls": NoCacheQuery})
 
     def test_session_update(self):
         node = Node()

@@ -15,7 +15,9 @@
 #    under the License.
 
 import json
+
 from paste.fixture import TestApp
+
 from nailgun.api.models import Cluster
 from nailgun.api.models import Node
 from nailgun.api.models import Release
@@ -131,6 +133,7 @@ class TestAttributes(BaseHandlers):
                 kwargs={'cluster_id': cluster['id']}),
             headers=self.default_headers
         )
+        self.db.add(release)
         self.assertEquals(200, resp.status)
         self.assertEquals(
             json.loads(resp.body)['editable'],

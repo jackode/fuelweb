@@ -16,7 +16,7 @@
 
 import json
 import traceback
-import web
+
 import netaddr
 from flask import request
 
@@ -92,8 +92,7 @@ class ClusterHandler(SingleHandler):
                                 if n not in cluster.nodes]
                 for node in nodes_to_add:
                     if not node.online:
-                        raise web.badrequest(
-                            "Can not add offline node to cluster")
+                        self.abort(400, "Can not add offline node to cluster")
                 map(cluster.nodes.remove, nodes_to_remove)
                 map(cluster.nodes.append, nodes_to_add)
                 for node in nodes_to_remove:

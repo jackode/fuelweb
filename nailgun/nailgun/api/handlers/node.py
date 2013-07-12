@@ -18,7 +18,7 @@ import json
 import traceback
 from datetime import datetime
 
-from flask import request
+from flask import request, make_response, Response
 
 from nailgun import notifier
 from nailgun.logger import logger
@@ -111,7 +111,9 @@ class NodeHandler(SingleHandler):
         node = self.get_object_or_404(Node, node_id)
         db.session.delete(node)
         db.session.commit()
-        self.abort(204)
+        resp = Response(status=204)
+        del resp.headers['content-type']
+        return resp
 
 
 class NodeCollectionHandler(CollectionHandler):
@@ -213,7 +215,7 @@ class NodeCollectionHandler(CollectionHandler):
         return self.render_one(node), 201
 
     @content_json
-    def PUT(self):
+    def put(self):
         data = self.checked_data(
             self.validator.validate_collection_update
         )
@@ -325,7 +327,7 @@ class NodeAttributesHandler(JSONHandler):
         node = self.get_object_or_404(Node, node_id)
         node_attrs = node.attributes
         if not node_attrs:
-            return web.notfound()
+            self.abort(404)
         return self.render(node_attrs)
 
     @content_json
@@ -467,6 +469,7 @@ class NodeAttributesByNameHandler(JSONHandler):
         else:
             setattr(node_attrs, attr_name, data)
             attr = getattr(node_attrs, attr_name)
+        db.session.commit()
         return attr
 
 
@@ -508,7 +511,7 @@ class NodeCollectionNICsHandler(JSONHandler):
             self.validator.verify_data_correctness(node_data)
             node_id = network_manager._update_attrs(node_data)
             updated_nodes_ids.append(node_id)
-        updated_nodes = db().query(Node).filter(
+        updated_nodes = db.session.query(Node).filter(
             Node.id.in_(updated_nodes_ids)
         ).all()
         return map(self.render, updated_nodes)
@@ -539,7 +542,7 @@ class NodeNICsDefaultHandler(JSONHandler):
                 nic.id
             )
             for ng_id in assigned_ng_ids:
-                ng = db().query(NetworkGroup).get(ng_id)
+                ng = db.session.query(NetworkGroup).get(ng_id)
                 nic_dict.setdefault("assigned_networks", []).append(
                     {"id": ng_id, "name": ng.name}
                 )
@@ -549,7 +552,7 @@ class NodeNICsDefaultHandler(JSONHandler):
                 nic.id
             )
             for ng_id in allowed_ng_ids:
-                ng = db().query(NetworkGroup).get(ng_id)
+                ng = db.session.query(NetworkGroup).get(ng_id)
                 nic_dict.setdefault("allowed_networks", []).append(
                     {"id": ng_id, "name": ng.name}
                 )
@@ -564,13 +567,13 @@ class NodeCollectionNICsDefaultHandler(NodeNICsDefaultHandler):
 
     @content_json
     def get(self):
-        user_data = web.input(cluster_id=None)
-        if user_data.cluster_id == '':
+        cluster_id = request.args.get('cluster_id')
+        if cluster_id == '':
             nodes = self.get_object_or_404(Node, cluster_id=None)
-        elif user_data.cluster_id:
+        elif cluster_id:
             nodes = self.get_object_or_404(
                 Node,
-                cluster_id=user_data.cluster_id
+                cluster_id=cluster_id
             )
         else:
             nodes = self.get_object_or_404(Node)

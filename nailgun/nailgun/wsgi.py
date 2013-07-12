@@ -26,7 +26,7 @@ sys.path.insert(0, curdir)
 from nailgun.settings import settings
 
 from nailgun.urls import urls
-from nailgun.application import application
+from nailgun.application import application, load_urls
 from nailgun.logger import logger, HTTPLoggerMiddleware
 
 
@@ -42,23 +42,8 @@ def build_middleware(app):
     return app(*middleware_list)
 
 
-def load_urls(app=None):
-    if not app:
-        app = application
-
-    from nailgun.urls import urls
-
-    app.url_map.strict_slashes = False
-    for url, handler in urls:
-        app.add_url_rule(
-            url,
-            view_func=handler.as_view(str(handler))
-        )
-    return app
-
-
 def run_server(debug=False, **kwargs):
-    load_urls()
+    load_urls(urls)
     application.run(
         debug=debug,
         host=kwargs.get("host") or settings.LISTEN_ADDRESS,

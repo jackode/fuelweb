@@ -79,7 +79,7 @@ class TestNetworkConfigurationHandler(BaseHandlers):
         new_net_manager = {'net_manager': 'VlanManager'}
         resp = self.put(self.cluster.id, new_net_manager)
 
-        self.db.refresh(self.cluster)
+        self.env.refresh_object(self.cluster)
         self.assertEquals(
             self.cluster.net_manager,
             new_net_manager['net_manager'])
@@ -92,7 +92,7 @@ class TestNetworkConfigurationHandler(BaseHandlers):
                            'networks': [{'id': 500, 'vlan_start': 500}]}
         resp = self.put(self.cluster.id, new_net_manager, expect_errors=True)
 
-        self.db.refresh(self.cluster)
+        self.env.refresh_object(self.cluster)
         self.assertNotEquals(
             self.cluster.net_manager,
             new_net_manager['net_manager'])
@@ -109,7 +109,7 @@ class TestNetworkConfigurationHandler(BaseHandlers):
 
         resp = self.put(self.cluster.id, new_nets)
         self.assertEquals(resp.status, 202)
-        self.db.refresh(network)
+        self.env.refresh_object(network)
         self.assertEquals(len(network.networks), 1)
         self.assertEquals(network.networks[0].vlan_id, 500)
 
@@ -122,8 +122,8 @@ class TestNetworkConfigurationHandler(BaseHandlers):
                    'networks': [{'id': network.id, 'vlan_start': new_vlan_id}]}
         resp = self.put(self.cluster.id, new_net)
 
-        self.db.refresh(self.cluster)
-        self.db.refresh(network)
+        self.env.refresh_object(self.cluster)
+        self.env.refresh_object(network)
         self.assertEquals(
             self.cluster.net_manager,
             new_net['net_manager'])

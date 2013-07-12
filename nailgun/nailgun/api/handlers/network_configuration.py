@@ -17,7 +17,10 @@
 import json
 import traceback
 
+from flask import request
+
 from nailgun.logger import logger
+from nailgun.errors import errors
 from nailgun.api.validators.network import NetworkConfigurationValidator
 from nailgun.database import db
 from nailgun.api.models import Cluster
@@ -42,8 +45,8 @@ class NetworkConfigurationVerifyHandler(JSONHandler):
         cluster = self.get_object_or_404(Cluster, cluster_id)
 
         try:
-            data = self.validator.validate_networks_update(web.data())
-        except web.webapi.badrequest as exc:
+            data = self.validator.validate_networks_update(request.data)
+        except errors.InvalidData as exc:
             task = Task(name='check_networks', cluster=cluster)
             db.session.add(task)
             db.session.commit()
@@ -89,7 +92,7 @@ class NetworkConfigurationHandler(JSONHandler):
         return result
 
     def put(self, cluster_id):
-        data = json.loads(web.data())
+        data = json.loads(request.data)
         cluster = self.get_object_or_404(Cluster, cluster_id)
 
         task_manager = CheckNetworksTaskManager(cluster_id=cluster.id)
@@ -102,8 +105,8 @@ class NetworkConfigurationHandler(JSONHandler):
                         validate_networks_update(json.dumps(data))
 
                 NetworkConfiguration.update(cluster, data)
-            except web.webapi.badrequest as exc:
-                TaskHelper.set_error(task.uuid, exc.data)
+            except errors.InvalidData as exc:
+                TaskHelper.set_error(task.uuid, str(exc))
                 logger.error(traceback.format_exc())
             except Exception as exc:
                 TaskHelper.set_error(task.uuid, exc)

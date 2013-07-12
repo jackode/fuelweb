@@ -20,7 +20,6 @@ from netaddr import IPAddress, IPNetwork
 from nailgun.test.base import BaseHandlers, reverse
 from nailgun.api.models import Node
 from nailgun.network.manager import NetworkManager
-from nailgun.db import db
 from nailgun.api.models import Network
 
 
@@ -58,7 +57,7 @@ class TestOSTFHandler(BaseHandlers):
         map(self.netmanager.assign_admin_ips, nodes_ids)
 
     def get_admin_network_cidr(self):
-        return db().query(Network).filter_by(
+        return Network.query.filter_by(
             name="fuelweb_admin"
         ).first().cidr
 

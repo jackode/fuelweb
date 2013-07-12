@@ -17,7 +17,6 @@
 import math
 from itertools import imap, ifilter, islice, chain, tee
 
-import web
 from sqlalchemy.sql import not_
 from netaddr import IPSet, IPNetwork, IPRange, IPAddress
 
@@ -536,7 +535,7 @@ class NetworkManager(object):
         :type  node: Node
         :returns: List of network groups for cluster node belongs to.
         """
-        node_db = db().query(Node).get(node_id)
+        node_db = db.session.query(Node).get(node_id)
         if node_db.cluster:
             return [ng.id for ng in node_db.cluster.network_groups]
         return []

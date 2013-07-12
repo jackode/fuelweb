@@ -37,8 +37,8 @@ class KeepAliveThread(threading.Thread):
         self.timeout = timeout or settings.KEEPALIVE['timeout']
 
     def reset_nodes_timestamp(self):
-        db().query(Node).update({'timestamp': datetime.now()})
-        db().commit()
+        db.session.query(Node).update({'timestamp': datetime.now()})
+        db.session.commit()
 
     def join(self, timeout=None):
         self.stop_status_checking.set()
@@ -66,7 +66,7 @@ class KeepAliveThread(threading.Thread):
                 break
 
     def update_status_nodes(self):
-        to_update = db().query(Node).filter(
+        to_update = db.session.query(Node).filter(
             not_(Node.status == 'provisioning')
         ).filter(
             datetime.now() > (Node.timestamp + timedelta(seconds=self.timeout))
@@ -81,4 +81,4 @@ class KeepAliveThread(threading.Thread):
                 node_id=node_db.id
             )
         to_update.update({"online": False})
-        db().commit()
+        db.session.commit()

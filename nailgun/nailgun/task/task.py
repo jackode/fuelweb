@@ -760,13 +760,13 @@ class DownloadReleaseTask(object):
 
         task.cache = message
         task.result = {'release_info': data}
-        db().add(task)
-        db().commit()
+        db.session.add(task)
+        db.session.commit()
         cls.__update_release_state(data['release_id'])
         rpc.cast('naily', message)
 
     @classmethod
     def __update_release_state(cls, release_id):
-        release = db().query(Release).get(release_id)
+        release = db.session.query(Release).get(release_id)
         release.state = 'downloading'
-        db().commit()
+        db.session.commit()

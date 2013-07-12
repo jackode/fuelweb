@@ -15,7 +15,6 @@
 #    under the License.
 
 
-import web
 import traceback
 
 from nailgun.database import db
@@ -35,7 +34,7 @@ class OSTFHandler(JSONHandler):
     """
 
     @content_json
-    def GET(self, cluster_id):
+    def get(self, cluster_id):
         try:
             cluster = db.session.query(Cluster).get(cluster_id)
             cluster_attrs = self.get_cluster_attrs(cluster)
@@ -55,7 +54,7 @@ class OSTFHandler(JSONHandler):
             }
         except Exception as exc:
             logger.error(traceback.format_exc())
-            raise web.badrequest(message=str(exc))
+            self.abort(400, str(exc))
 
     def get_cluster_attrs(self, cluster):
         attrs = cluster.attributes.editable

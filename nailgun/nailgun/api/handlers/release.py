@@ -16,9 +16,10 @@
 
 import json
 
-from flask import request
+from flask import request, make_response, Response
 
 from nailgun.errors import errors
+from nailgun.database import db
 from nailgun.api.models import Release
 from nailgun.api.validators.release import ReleaseValidator
 from nailgun.api.handlers.base import content_json
@@ -52,7 +53,9 @@ class ReleaseHandler(SingleHandler):
         release = self.get_object_or_404(Release, release_id)
         db.session.delete(release)
         db.session.commit()
-        self.abort(204)
+        resp = Response(status=204)
+        del resp.headers['content-type']
+        return resp
 
 
 class ReleaseCollectionHandler(CollectionHandler):
@@ -69,4 +72,4 @@ class ReleaseCollectionHandler(CollectionHandler):
             setattr(release, key, value)
         db.session.add(release)
         db.session.commit()
-        return self.render(release), 201
+        return self.render_one(release), 201

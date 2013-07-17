@@ -34,10 +34,11 @@ from nailgun.api.handlers.release import ReleaseCollectionHandler
 from nailgun.api.handlers.node import NodesAllocationStatsHandler
 from nailgun.api.handlers.node import NodeHandler
 from nailgun.api.handlers.node import NodeCollectionHandler
-from nailgun.api.handlers.node import NodeAttributesHandler
-from nailgun.api.handlers.node import NodeAttributesDefaultsHandler
-from nailgun.api.handlers.node import NodeAttributesByNameHandler
-from nailgun.api.handlers.node import NodeAttributesByNameDefaultsHandler
+
+from nailgun.api.handlers.disks import NodeDisksHandler
+from nailgun.api.handlers.disks import NodeDefaultsDisksHandler
+from nailgun.api.handlers.disks import NodeVolumesInformationHandler
+
 from nailgun.api.handlers.node import NodeNICsHandler
 from nailgun.api.handlers.node import NodeNICsDefaultHandler
 from nailgun.api.handlers.node import NodeCollectionNICsHandler
@@ -67,6 +68,7 @@ urls = (
     'ReleaseCollectionHandler',
     r'/releases/(?P<release_id>\d+)/?$',
     'ReleaseHandler',
+
     r'/clusters/?$',
     'ClusterCollectionHandler',
     r'/clusters/(?P<cluster_id>\d+)/?$',
@@ -81,18 +83,17 @@ urls = (
     'NetworkConfigurationHandler',
     r'/clusters/(?P<cluster_id>\d+)/network_configuration/verify/?$',
     'NetworkConfigurationVerifyHandler',
+
     r'/nodes/?$',
     'NodeCollectionHandler',
     r'/nodes/(?P<node_id>\d+)/?$',
     'NodeHandler',
-    r'/nodes/(?P<node_id>\d+)/attributes/?$',
-    'NodeAttributesHandler',
-    r'/nodes/(?P<node_id>\d+)/attributes/defaults/?$',
-    'NodeAttributesDefaultsHandler',
-    r'/nodes/(?P<node_id>\d+)/attributes/(?P<attr_name>[-\w]+)/?$',
-    'NodeAttributesByNameHandler',
-    r'/nodes/(?P<node_id>\d+)/attributes/(?P<attr_name>[-\w]+)/defaults/?$',
-    'NodeAttributesByNameDefaultsHandler',
+    r'/nodes/(?P<node_id>\d+)/disks/?$',
+    'NodeDisksHandler',
+    r'/nodes/(?P<node_id>\d+)/disks/defaults/?$',
+    'NodeDefaultsDisksHandler',
+    r'/nodes/(?P<node_id>\d+)/volumes/?$',
+    r'NodeVolumesInformationHandler',
     r'/nodes/interfaces/?$',
     'NodeCollectionNICsHandler',
     r'/nodes/interfaces/default_assignment?$',
@@ -109,10 +110,12 @@ urls = (
     'TaskCollectionHandler',
     r'/tasks/(?P<task_id>\d+)/?$',
     'TaskHandler',
+
     r'/notifications/?$',
     'NotificationCollectionHandler',
     r'/notifications/(?P<notification_id>\d+)/?$',
     'NotificationHandler',
+
     r'/logs/?$',
     'LogEntryCollectionHandler',
     r'/logs/package/?$',
@@ -121,8 +124,10 @@ urls = (
     'LogSourceCollectionHandler',
     r'/logs/sources/nodes/(?P<node_id>\d+)/?$',
     'LogSourceByNodeCollectionHandler',
+
     r'/version/?$',
     'VersionHandler',
+
     r'/plugins/?$',
     'PluginCollectionHandler',
     r'/plugins/(?P<plugin_id>\d+)/?$',

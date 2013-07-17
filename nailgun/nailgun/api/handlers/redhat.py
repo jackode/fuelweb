@@ -12,9 +12,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import web
+import datetime
+import os
+import signal
 import subprocess
 import shlex
+import time
+
+import web
 
 from nailgun.api.handlers.base import JSONHandler, content_json
 from nailgun.api.handlers.tasks import TaskHandler
@@ -34,7 +39,7 @@ class RedHatAccountHandler(JSONHandler):
 
     validator = RedHatAcountValidator
 
-    def timeout_command(command, timeout=5):
+    def timeout_command(self, command, timeout=5):
         """call shell-command and either return its output or kill it
         if it doesn't normally exit within timeout seconds and return None"""
 
@@ -64,7 +69,7 @@ class RedHatAccountHandler(JSONHandler):
                   '"%s" --password "%s"' % \
                   (data.get("username"), data.get("password"))
 
-            output = timeout_command(shlex.split(cmd))
+            output = self.timeout_command(shlex.split(cmd))
             if not output:
                 raise web.badrequest('Timed out. Please, try again.')
 

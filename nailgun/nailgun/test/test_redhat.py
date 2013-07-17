@@ -14,10 +14,13 @@
 
 import json
 from paste.fixture import TestApp
+import shlex
 
 import mock
+from mock import patch
 
 import nailgun
+from nailgun.api.handlers.redhat import RedHatAccountHandler
 from nailgun.api.models import Release
 from nailgun.settings import settings
 
@@ -69,7 +72,7 @@ class TestHandlers(BaseHandlers):
     @fake_tasks()
     def test_redhat_account_validation_failure(self):
         resp = self.app.post(
-            reverse('RedHatAccountHandler'),
+            reverse('test_redhat_account_handler'),
             json.dumps({'license_type': 'rhsm',
                         'username': 'some_user',
                         'password': 'password',
@@ -77,3 +80,24 @@ class TestHandlers(BaseHandlers):
             headers=self.default_headers,
             expect_errors=True)
         self.assertEquals(resp.status, 400)
+
+    @patch('time.sleep')
+    @patch('os.kill')
+    @patch('os.waitpid')
+    def test_timeout_command(self, mock_sleep, mock_kill, mock_waitpid):
+        command = 'ls -al'
+        with patch('subprocess.Popen') as popen:
+            instance = popen.return_value
+            instance.poll.return_value = None
+            handler = RedHatAccountHandler()
+            retval = handler.timeout_command(shlex.split(command), 0)
+            self.assertEquals(retval, None)
+
+        with patch('subprocess.Popen') as popen:
+            instance = popen.return_value
+            instance.stdout.read.return_value = 'stdout'
+            instance.stderr.read.return_value = 'stderr'
+            #instance.poll.return_value = None
+            handler = RedHatAccountHandler()
+            retval = handler.timeout_command(shlex.split(command), 0)
+            self.assertEquals(retval, ('stdout', 'stderr'))

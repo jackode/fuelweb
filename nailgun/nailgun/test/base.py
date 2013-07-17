@@ -133,7 +133,6 @@ class Environment(object):
             'password': 'password',
             'release_id': release_id
         }
-
         resp = self.app.post(
             reverse('RedHatAccountHandler'),
             params=json.dumps(release_data),
@@ -141,7 +140,8 @@ class Environment(object):
         )
         self.tester.assertEquals(resp.status, 200)
         download_task = json.loads(resp.body)
-        return self.db.query(Task).get(download_task['id'])
+        task = self.db.query(Task).get(download_task['id'])
+        return task
 
     def create_cluster(self, api=True, exclude=None, **kwargs):
         cluster_data = {
@@ -683,15 +683,17 @@ class BaseHandlers(TestCase):
                         )
 
     def setUp(self):
-        #flush()
-        db.drop_all()
-        db.create_all()
+        flush()
+        syncdb()
+        #db.drop_all()
+        #db.create_all()
         self.env = Environment(app=self.app, session=self.db)
         self.env.upload_fixtures(self.fixtures)
 
     def tearDown(self):
         db.session.remove()
-        db.drop_all()
+        #db.drop_all()
+        flush()
 
 
 def fake_tasks(fake_rpc=True,

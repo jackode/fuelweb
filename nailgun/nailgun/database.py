@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import traceback
+import contextlib
 
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.exc import ProgrammingError
@@ -87,12 +88,9 @@ def make_session():
 def flush():
     import nailgun.api.models as models
     import sqlalchemy.ext.declarative as dec
-    session = db.session
-    for attr in dir(models):
-        attr_impl = getattr(models, attr)
-        if isinstance(attr_impl, dec.DeclarativeMeta) \
-                and not attr_impl is models.db:
-            map(session.delete, session.query(attr_impl).all())
-    # for table in reversed(models.Base.metadata.sorted_tables):
-    #     session.execute(table.delete())
-    session.commit()
+    with contextlib.closing(db.engine.connect()) as con:
+        trans = con.begin()
+        for table in reversed(db.metadata.sorted_tables):
+            if db.engine.dialect.has_table(con, table):
+                con.execute(table.delete())
+        trans.commit()

@@ -61,8 +61,11 @@ class FakeThread(threading.Thread):
     def rude_join(self, timeout=None):
         self.stoprequest.set()
         super(FakeThread, self).join(timeout)
+        db.session.remove()
 
     def sleep(self, timeout):
+        if self.stoprequest.isSet():
+            return
         map(
             lambda i: not self.stoprequest.isSet() and time.sleep(i),
             repeat(1, timeout)

@@ -207,7 +207,8 @@ class NodeCollectionHandler(CollectionHandler):
             hd_size = "unknown HDD"
 
         cores = str(node.meta.get('cpu', {}).get('total', "unknown"))
-        notifier.notify("discover",
+        notifier.notify(
+            "discover",
             "New node is discovered: %s CPUs / %s / %s " %
             (cores, ram, hd_size),
             node_id=node.id
@@ -609,11 +610,10 @@ class NodeNICsVerifyHandler(JSONHandler):
         return map(self.render, topo, fields=fields_with_conflicts)
 
 
-class NodesAllocationStatsHandler(object):
+class NodesAllocationStatsHandler(JSONHandler):
     @content_json
-    def GET(self):
-        unallocated_nodes = db().query(Node).filter_by(cluster_id=None).count()
-        total_nodes = \
-            db().query(Node).count()
+    def get(self):
+        unallocated_nodes = Node.query.filter_by(cluster_id=None).count()
+        total_nodes = Node.query.count()
         return {'total': total_nodes,
                 'unallocated': unallocated_nodes}

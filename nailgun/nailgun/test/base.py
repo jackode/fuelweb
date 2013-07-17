@@ -649,6 +649,12 @@ class BaseHandlers(TestCase):
         self.monkey_patch_refresh()
 
     def monkey_patch_refresh(self):
+        """
+        This monkey patching is used for handling the situation that
+        every API request clears current DB session. It wasn't so before,
+        so for now it's just a temporary fix before unit tests will be
+        rewritten
+        """
         def request_with_refresh(method, *args, **kwargs):
             res = method(*args, **kwargs)
             self.env.refresh_nodes()
@@ -685,14 +691,11 @@ class BaseHandlers(TestCase):
     def setUp(self):
         flush()
         syncdb()
-        #db.drop_all()
-        #db.create_all()
         self.env = Environment(app=self.app, session=self.db)
         self.env.upload_fixtures(self.fixtures)
 
     def tearDown(self):
         db.session.remove()
-        #db.drop_all()
         flush()
 
 

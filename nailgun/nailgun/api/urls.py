@@ -122,6 +122,10 @@ urls = (
         NodeAttributesByNameDefaultsHandler
     ),
     (
+        '/api/nodes/allocation/stats/',
+        NodesAllocationStatsHandler
+    ),
+    (
         '/api/nodes/interfaces/',
         NodeCollectionNICsHandler
     ),

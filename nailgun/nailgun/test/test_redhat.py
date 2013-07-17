@@ -72,7 +72,7 @@ class TestHandlers(BaseHandlers):
     @fake_tasks()
     def test_redhat_account_validation_failure(self):
         resp = self.app.post(
-            reverse('test_redhat_account_handler'),
+            reverse('RedHatAccountHandler'),
             json.dumps({'license_type': 'rhsm',
                         'username': 'some_user',
                         'password': 'password',

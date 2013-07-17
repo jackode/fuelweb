@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations
  * under the License.
 **/
-define(function() {
+define(['utils'], function(utils) {
     'use strict';
 
     var models = {};
@@ -127,14 +127,6 @@ define(function() {
     models.Node = Backbone.Model.extend({
         constructorName: 'Node',
         urlRoot: '/api/nodes',
-        volumeGroupsByRoles: function(role) {
-            var volumeGroups =  {
-                controller: ['os'],
-                compute: ['os', 'vm'],
-                cinder: ['os', 'cinder']
-            };
-            return volumeGroups[role];
-        },
         resource: function(resourceName) {
             var resource = 0;
             try {
@@ -252,17 +244,15 @@ define(function() {
     models.Disk = Backbone.Model.extend({
         constructorName: 'Disk',
         urlRoot: '/api/nodes/',
-        validate: function(attrs, options) {
-            var errors = {};
-            var volume = _.find(attrs.volumes, {vg: options.group});
-            if (_.isNaN(volume.size) || volume.size < 0) {
-                errors[volume.vg] = 'Invalid size';
-            } else if (volume.size > options.unallocated) {
-                errors[volume.vg] = 'Maximal size is ' + options.unallocated + ' GB';
-            } else if (volume.size < options.min) {
-                errors[volume.vg] = 'Minimal size is ' + options.min.toFixed(2) + ' GB';
-            }
-            return _.isEmpty(errors) ? null : errors;
+        getVolume: function (name) {
+            return this.get('volumes').findWhere({name: name});
+        },
+        parse: function(response) {
+            response.volumes = new models.Volumes(response.volumes);
+            return response;
+        },
+        toJSON: function(options) {
+            return _.extend(this.constructor.__super__.toJSON.call(this, options), {volumes: this.get('volumes').toJSON()});
         }
     });
 
@@ -273,6 +263,28 @@ define(function() {
         comparator: function(disk) {
             return disk.id;
         }
+    });
+
+    models.Volume = Backbone.Model.extend({
+        constructorName: 'Volume',
+        urlRoot: '/api/volumes/',
+        validate: function(attrs, options) {
+            var errors = {};
+            if (_.isNaN(attrs.size) || attrs.size < 0) {
+                errors[attrs.name] = 'Invalid size';
+            } else if (options.max && attrs.size > options.max) {
+                errors[attrs.name] = 'The value is too large. It exceeds the total available space of ' + utils.formatNumber(options.max) + ' MB. You can reduce one of the other volume groups in size';
+            } else if (options.min && attrs.size < options.min) {
+                errors[attrs.name] = 'The value is too low. You must allocate at least ' + utils.formatNumber(options.min) + ' MB';
+            }
+            return _.isEmpty(errors) ? null : errors;
+        }
+    });
+
+    models.Volumes = Backbone.Collection.extend({
+        constructorName: 'Volumes',
+        model: models.Volume,
+        url: '/api/volumes/'
     });
 
     models.Interface = Backbone.Model.extend({
